@@ -1,0 +1,2279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Spot Club — Panel Administrativo</title>
+
+<!-- ==================== TAILWIND CSS (CDN) ==================== -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          spotblack: '#000000',
+          charcoal: '#0a0a0a',
+          graphite: '#121212',
+          slate: '#1e1e1e',
+          silver: '#A1A1AA',
+          line: '#27272A',
+        },
+        fontFamily: {
+          display: ['"Anton"', 'sans-serif'],
+          body: ['"Space Grotesk"', 'sans-serif'],
+        },
+        boxShadow: {
+          glow: '0 0 40px rgba(255,255,255,0.06)',
+        },
+      },
+    },
+  };
+</script>
+
+<!-- ==================== GOOGLE FONTS ==================== -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+  rel="stylesheet"
+/>
+
+<!-- ==================== THREE.JS (CDN) — fondo shader ==================== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { background: #000000; }
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  .font-display { font-family: 'Anton', sans-serif; letter-spacing: 0.02em; }
+
+  /* ---------- Shader background canvas ---------- */
+  #bg-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 0;
+    display: block;
+  }
+  .app-shell { position: relative; z-index: 10; }
+
+  /* ---------- Glassmorphism oscuro ---------- */
+  .glass {
+    background: rgba(18, 18, 18, 0.55);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid #27272A;
+  }
+  .glass-strong {
+    background: rgba(10, 10, 10, 0.75);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    border: 1px solid #27272A;
+  }
+
+  /* ---------- Scrollbar ---------- */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #0a0a0a; }
+  ::-webkit-scrollbar-thumb { background: #27272A; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+  /* ---------- Animations ---------- */
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+  @keyframes popCheck { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.15); opacity: 1; } 100% { transform: scale(1); } }
+  @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes pulseRing { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); } 100% { box-shadow: 0 0 0 12px rgba(255,255,255,0); } }
+
+  .anim-fade-in { animation: fadeIn 0.5s ease both; }
+  .anim-slide-up { animation: slideUp 0.5s cubic-bezier(.16,1,.3,1) both; }
+  .anim-slide-down { animation: slideDown 0.35s cubic-bezier(.16,1,.3,1) both; }
+  .anim-scale-in { animation: scaleIn 0.35s cubic-bezier(.16,1,.3,1) both; }
+  .anim-check { animation: popCheck 0.5s cubic-bezier(.34,1.56,.64,1) both; }
+  .anim-toast { animation: toastIn 0.35s cubic-bezier(.16,1,.3,1) both; }
+  .stagger-1 { animation-delay: .04s; } .stagger-2 { animation-delay: .08s; }
+  .stagger-3 { animation-delay: .12s; } .stagger-4 { animation-delay: .16s; }
+  .stagger-5 { animation-delay: .2s; }
+
+  .card-press { transition: transform .15s ease, border-color .2s ease, background-color .2s ease; }
+  .card-press:active { transform: scale(0.97); }
+
+  .btn-primary {
+    background: #ffffff; color: #000000; font-weight: 600;
+    transition: all .2s cubic-bezier(.16,1,.3,1);
+  }
+  .btn-primary:hover { background: #e4e4e7; box-shadow: 0 0 24px rgba(255,255,255,0.18); transform: translateY(-1px); }
+  .btn-primary:active { transform: scale(0.96); }
+
+  .btn-ghost {
+    background: transparent; color: #A1A1AA; border: 1px solid #27272A;
+    transition: all .2s cubic-bezier(.16,1,.3,1);
+  }
+  .btn-ghost:hover { color: #fff; border-color: #52525b; background: rgba(255,255,255,0.03); }
+  .btn-ghost:active { transform: scale(0.96); }
+
+  .btn-danger { color: #f87171; border: 1px solid #3f1d1d; transition: all .2s ease; }
+  .btn-danger:hover { background: rgba(248,113,113,0.08); border-color: #f87171; }
+
+  .nav-item { position: relative; transition: all .2s ease; }
+  .nav-item.active { background: rgba(255,255,255,0.06); color: #fff; }
+  .nav-item.active::before {
+    content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    width: 3px; height: 60%; background: #fff; border-radius: 2px;
+  }
+  .nav-item:hover:not(.active) { background: rgba(255,255,255,0.03); color: #fff; }
+
+  .input-dark {
+    background: #121212; border: 1px solid #27272A; color: #fff;
+    transition: border-color .2s ease, box-shadow .2s ease;
+  }
+  .input-dark:focus { outline: none; border-color: #71717a; box-shadow: 0 0 0 3px rgba(255,255,255,0.06); }
+  .input-dark::placeholder { color: #52525b; }
+
+  .chip-size {
+    transition: all .15s ease; user-select: none;
+  }
+  .chip-size.selected { background: #fff; color: #000; border-color: #fff; }
+
+  .pos-mode-btn { color: #71717a; transition: all .2s ease; }
+  .pos-mode-btn.active { background: #fff; color: #000; }
+  .pos-mode-btn:hover:not(.active) { color: #fff; }
+
+  .skeleton {
+    background: linear-gradient(90deg, #121212 25%, #1e1e1e 37%, #121212 63%);
+    background-size: 400% 100%; animation: shimmer 1.4s ease infinite;
+  }
+
+  table.sc-table thead th {
+    position: sticky; top: 0; background: #0a0a0a; z-index: 5;
+  }
+  table.sc-table tbody tr { transition: background-color .15s ease; }
+  table.sc-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+
+  .modal-backdrop { background: rgba(0,0,0,0.7); backdrop-filter: blur(6px); }
+
+  .pulse-dot { animation: pulseRing 1.6s cubic-bezier(0.66, 0, 0, 1) infinite; }
+
+  /* Print styles: solo el recibo es visible al imprimir */
+  @media print {
+    body * { visibility: hidden; }
+    #receipt-print-area, #receipt-print-area * { visibility: visible; }
+    #receipt-print-area {
+      position: fixed; inset: 0; background: #fff !important; color: #000 !important;
+      padding: 24px;
+    }
+    #receipt-print-area * { color: #000 !important; border-color: #ccc !important; }
+  }
+
+  [hidden] { display: none !important; }
+</style>
+</head>
+
+<body class="bg-black text-white font-body min-h-screen">
+
+<!-- ==================== FONDO WEBGL (Three.js shader) ==================== -->
+<canvas id="bg-canvas"></canvas>
+
+<!-- ==================== BANNER: CONFIGURACIÓN FIREBASE REQUERIDA ==================== -->
+<div id="config-banner" hidden class="fixed top-0 left-0 right-0 z-[100] bg-white text-black text-sm font-medium px-4 py-2 flex items-center justify-center gap-2 anim-slide-down">
+  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.14A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+  Configura tu <code class="font-mono bg-black/10 px-1 rounded">firebaseConfig</code> dentro del &lt;script&gt; para activar la sincronización en tiempo real de Spot Club.
+</div>
+
+<div class="app-shell flex min-h-screen">
+
+  <!-- ==================== SIDEBAR ==================== -->
+  <aside class="hidden md:flex w-64 shrink-0 flex-col glass-strong border-r border-line h-screen sticky top-0">
+    <div class="px-6 py-7 border-b border-line">
+      <h1 class="font-display text-3xl tracking-wider leading-none">SPOT<span class="text-silver">CLUB</span></h1>
+      <p class="text-[11px] uppercase tracking-[0.25em] text-silver mt-1.5">Panel Administrativo</p>
+    </div>
+
+    <nav class="flex-1 px-3 py-5 space-y-1" id="sidebar-nav">
+      <button data-section="dashboard" class="nav-item active w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">
+        <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>
+        Dashboard
+      </button>
+      <button data-section="inventario" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">
+        <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+        Inventario
+      </button>
+      <button data-section="pos" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">
+        <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>
+        Punto de Venta
+      </button>
+      <button data-section="historial" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">
+        <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+        Historial &amp; Facturación
+      </button>
+      <button data-section="cuentas" class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">
+        <svg class="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>
+        Cuentas &amp; Caja
+      </button>
+    </nav>
+
+    <div class="px-6 py-5 border-t border-line">
+      <div class="flex items-center gap-2 text-xs text-silver">
+        <span id="conn-dot" class="w-2 h-2 rounded-full bg-zinc-600"></span>
+        <span id="conn-label">Conectando…</span>
+      </div>
+      <p class="text-[10px] text-zinc-600 mt-2">Spot Club © <span id="year-tag"></span> — Uso interno</p>
+    </div>
+  </aside>
+
+  <!-- ==================== MOBILE TOP NAV ==================== -->
+  <div class="md:hidden fixed top-0 left-0 right-0 z-50 glass-strong border-b border-line px-4 py-3 flex items-center justify-between">
+    <h1 class="font-display text-xl tracking-wider">SPOT<span class="text-silver">CLUB</span></h1>
+    <button id="mobile-menu-btn" class="btn-ghost rounded-lg p-2">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+  </div>
+  <div id="mobile-nav" hidden class="md:hidden fixed inset-0 z-40 modal-backdrop">
+    <div class="glass-strong absolute top-14 left-0 right-0 p-3 space-y-1 anim-slide-down">
+      <button data-section="dashboard" class="nav-item-mobile w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">Dashboard</button>
+      <button data-section="inventario" class="nav-item-mobile w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">Inventario</button>
+      <button data-section="pos" class="nav-item-mobile w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">Punto de Venta</button>
+      <button data-section="historial" class="nav-item-mobile w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">Historial &amp; Facturación</button>
+      <button data-section="cuentas" class="nav-item-mobile w-full text-left flex items-center gap-3 px-4 py-3 rounded-lg text-sm text-silver">Cuentas &amp; Caja</button>
+    </div>
+  </div>
+
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <main class="flex-1 min-h-screen pt-16 md:pt-0 overflow-x-hidden">
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <section id="section-dashboard" class="p-5 md:p-10 space-y-8">
+      <header class="anim-slide-up">
+        <h2 class="font-display text-3xl md:text-4xl tracking-wide">DASHBOARD FINANCIERO</h2>
+        <p class="text-silver text-sm mt-1">Resumen en tiempo real de la operación de Spot Club.</p>
+      </header>
+
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass rounded-2xl p-5 anim-slide-up stagger-1 card-press">
+          <p class="text-[11px] uppercase tracking-widest text-silver">Ingresos Brutos</p>
+          <p id="kpi-ingresos" class="font-display text-3xl mt-2">$0.00</p>
+          <p class="text-xs text-zinc-500 mt-1">Total histórico filtrado</p>
+        </div>
+        <div class="glass rounded-2xl p-5 anim-slide-up stagger-2 card-press">
+          <p class="text-[11px] uppercase tracking-widest text-silver">Ganancia Neta</p>
+          <p id="kpi-ganancia" class="font-display text-3xl mt-2 text-white">$0.00</p>
+          <p class="text-xs text-zinc-500 mt-1">Ingresos − costo de mercancía</p>
+        </div>
+        <div class="glass rounded-2xl p-5 anim-slide-up stagger-3 card-press">
+          <p class="text-[11px] uppercase tracking-widest text-silver">Prendas Vendidas</p>
+          <p id="kpi-prendas" class="font-display text-3xl mt-2">0</p>
+          <p class="text-xs text-zinc-500 mt-1">Unidades totales</p>
+        </div>
+        <div class="glass rounded-2xl p-5 anim-slide-up stagger-4 card-press">
+          <p class="text-[11px] uppercase tracking-widest text-silver">Ticket Promedio</p>
+          <p id="kpi-ticket" class="font-display text-3xl mt-2">$0.00</p>
+          <p class="text-xs text-zinc-500 mt-1">Por venta registrada</p>
+        </div>
+      </div>
+
+      <!-- Desglose por método de pago + filtros -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div class="lg:col-span-2 glass rounded-2xl p-6 anim-slide-up">
+          <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h3 class="font-semibold tracking-wide">Desglose de Caja por Método de Pago</h3>
+          </div>
+          <div id="payment-breakdown" class="grid grid-cols-2 sm:grid-cols-3 gap-3"></div>
+        </div>
+
+        <div class="glass rounded-2xl p-6 anim-slide-up stagger-2">
+          <h3 class="font-semibold tracking-wide mb-4">Filtro de Periodo</h3>
+          <div class="space-y-2">
+            <select id="date-filter" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
+              <option value="hoy">Hoy</option>
+              <option value="7d">Últimos 7 días</option>
+              <option value="mes">Este mes</option>
+              <option value="todo">Todo</option>
+              <option value="custom">Rango personalizado</option>
+            </select>
+            <div id="custom-range" hidden class="flex gap-2">
+              <input type="date" id="range-start" class="input-dark w-1/2 rounded-lg px-2 py-2 text-xs" />
+              <input type="date" id="range-end" class="input-dark w-1/2 rounded-lg px-2 py-2 text-xs" />
+            </div>
+            <button id="btn-export-csv" class="btn-ghost w-full rounded-lg px-3 py-2.5 text-sm flex items-center justify-center gap-2 mt-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 21h16"/></svg>
+              Exportar CSV
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historial de ventas -->
+      <div class="glass rounded-2xl overflow-hidden anim-slide-up">
+        <div class="p-6 pb-4 flex items-center justify-between flex-wrap gap-3">
+          <h3 class="font-semibold tracking-wide">Historial de Ventas</h3>
+          <input id="history-search" type="text" placeholder="Buscar por prenda, talla o cliente…" class="input-dark rounded-lg px-3 py-2 text-sm w-64 max-w-full" />
+        </div>
+        <div class="overflow-x-auto max-h-[480px] overflow-y-auto">
+          <table class="sc-table w-full text-sm">
+            <thead>
+              <tr class="text-left text-silver text-xs uppercase tracking-wider border-b border-line">
+                <th class="px-6 py-3">Fecha</th>
+                <th class="px-6 py-3">Hora</th>
+                <th class="px-6 py-3">Detalle</th>
+                <th class="px-6 py-3">Método</th>
+                <th class="px-6 py-3 text-right">Monto</th>
+                <th class="px-6 py-3 text-center">Recibo</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr><td colspan="6" class="px-6 py-10 text-center text-zinc-600 text-sm">Sin ventas registradas todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- INVENTARIO ---------- -->
+    <section id="section-inventario" class="p-5 md:p-10 space-y-6" hidden>
+      <header class="flex items-center justify-between flex-wrap gap-4 anim-slide-up">
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl tracking-wide">CATÁLOGO SPOT CLUB</h2>
+          <p class="text-silver text-sm mt-1">Gestión de inventario, materiales y precios.</p>
+        </div>
+        <button id="btn-new-product" class="btn-primary rounded-lg px-5 py-3 text-sm flex items-center gap-2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+          Nueva Prenda
+        </button>
+      </header>
+
+      <!-- Precios de Diseño / Estampado -->
+      <div class="glass rounded-2xl p-5 anim-slide-up">
+        <div class="mb-4">
+          <h3 class="font-semibold tracking-wide">Precios de Diseño / Estampado</h3>
+          <p class="text-xs text-silver mt-0.5">Tamaños fijos de estampado, con precio ajustable. Aplica a las prendas que marques con "Lleva diseño" (franela algodón, franela microdurazno, hoodies, etc).</p>
+        </div>
+        <form id="design-prices-form" class="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+          <div>
+            <label class="text-xs uppercase tracking-wider text-silver">10x10 cm</label>
+            <input type="text" inputmode="decimal" id="precio-10x10" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          </div>
+          <div>
+            <label class="text-xs uppercase tracking-wider text-silver">22x28 cm</label>
+            <input type="text" inputmode="decimal" id="precio-22x28" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          </div>
+          <div>
+            <label class="text-xs uppercase tracking-wider text-silver">28x36 cm</label>
+            <input type="text" inputmode="decimal" id="precio-28x36" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          </div>
+          <div>
+            <label class="text-xs uppercase tracking-wider text-silver">40x40 cm</label>
+            <input type="text" inputmode="decimal" id="precio-40x40" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          </div>
+          <div class="col-span-2 sm:col-span-4 flex justify-end">
+            <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Guardar precios de diseño</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Filtros -->
+      <div class="glass rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-4 gap-3 anim-slide-up">
+        <input id="filter-search" type="text" placeholder="Buscar prenda…" class="input-dark rounded-lg px-3 py-2.5 text-sm sm:col-span-2" />
+        <select id="filter-categoria" class="input-dark rounded-lg px-3 py-2.5 text-sm">
+          <option value="">Todas las categorías</option>
+        </select>
+        <select id="filter-material" class="input-dark rounded-lg px-3 py-2.5 text-sm">
+          <option value="">Todos los materiales</option>
+        </select>
+        <label class="flex items-center gap-2 text-sm text-silver sm:col-span-4 mt-1 cursor-pointer select-none">
+          <input type="checkbox" id="filter-low-stock" class="accent-white w-4 h-4" />
+          Mostrar solo productos con stock bajo
+        </label>
+      </div>
+
+      <!-- Grid de productos -->
+      <div id="product-grid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      <p id="product-empty" class="text-center text-zinc-600 text-sm py-16" hidden>No se encontraron prendas con estos filtros.</p>
+    </section>
+
+    <!-- ---------- POS ---------- -->
+    <section id="section-pos" class="p-5 md:p-10" hidden>
+      <header class="anim-slide-up mb-6">
+        <h2 class="font-display text-3xl md:text-4xl tracking-wide">PUNTO DE VENTA</h2>
+        <p class="text-silver text-sm mt-1">Registro rápido de ventas en tienda.</p>
+      </header>
+
+      <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <!-- Selector de producto -->
+        <div class="lg:col-span-3 glass rounded-2xl p-6 space-y-4 anim-slide-up">
+          <div class="flex items-center justify-between flex-wrap gap-3">
+            <h3 class="font-semibold tracking-wide">Agregar Prenda a la Venta</h3>
+            <div class="flex bg-black/40 rounded-lg p-1 gap-1 text-xs">
+              <button type="button" data-mode="inventario" class="pos-mode-btn active px-3 py-1.5 rounded-md font-medium">Desde Inventario</button>
+              <button type="button" data-mode="pedido" class="pos-mode-btn px-3 py-1.5 rounded-md font-medium">Por Pedido (Sin Stock)</button>
+            </div>
+          </div>
+
+          <div id="pedido-banner" hidden class="flex items-start gap-2 bg-amber-950/20 border border-amber-800/60 text-amber-400 text-xs rounded-lg px-3 py-2.5 anim-slide-down">
+            <svg class="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.14A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+            <span>Venta sobre pedido: se factura y se registra en caja sin descontar existencias. Úsala para prendas que encargas al proveedor después de recibir el pago.</span>
+          </div>
+
+          <label id="custom-item-toggle-wrap" hidden class="flex items-center gap-2 text-sm text-silver cursor-pointer select-none">
+            <input type="checkbox" id="pos-custom-toggle" class="accent-white w-4 h-4" />
+            Producto personalizado (fuera del catálogo)
+          </label>
+
+          <div id="pos-catalog-fields">
+            <label class="text-xs uppercase tracking-wider text-silver">Producto</label>
+            <select id="pos-product" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5">
+              <option value="">Selecciona una prenda…</option>
+            </select>
+          </div>
+
+          <div id="pos-custom-fields" hidden class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
+              <label class="text-xs uppercase tracking-wider text-silver">Nombre de la prenda</label>
+              <input id="pos-custom-nombre" type="text" placeholder="Ej. Hoodie edición especial" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5" />
+            </div>
+            <div>
+              <label class="text-xs uppercase tracking-wider text-silver">Categoría</label>
+              <input id="pos-custom-categoria" list="categoria-options" type="text" placeholder="Ej. Hoodie" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5" />
+            </div>
+            <div>
+              <label class="text-xs uppercase tracking-wider text-silver">Material</label>
+              <input id="pos-custom-material" list="material-options" type="text" placeholder="Ej. Fleece" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5" />
+            </div>
+            <label class="sm:col-span-2 flex items-center gap-2 text-xs text-silver cursor-pointer select-none">
+              <input type="checkbox" id="pos-custom-aplica-diseno" class="accent-white w-4 h-4" />
+              Este producto personalizado lleva diseño / estampado
+            </label>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label id="pos-talla-label" class="text-xs uppercase tracking-wider text-silver">Talla / Stock disponible</label>
+              <select id="pos-talla" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5" disabled>
+                <option value="">—</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-xs uppercase tracking-wider text-silver">Cantidad</label>
+              <input id="pos-cantidad" type="number" min="1" value="1" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5" disabled />
+            </div>
+          </div>
+
+          <div id="pos-product-info" class="text-xs text-zinc-500 -mt-1" hidden></div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs uppercase tracking-wider text-silver">Precio unitario ($)</label>
+              <input id="pos-precio" type="text" inputmode="decimal" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5" disabled />
+            </div>
+            <div id="pos-costo-wrap" hidden>
+              <label class="text-xs uppercase tracking-wider text-silver">Costo estimado ($)</label>
+              <input id="pos-costo" type="text" inputmode="decimal" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5" disabled />
+            </div>
+          </div>
+
+          <div id="pos-diseno-wrap" hidden class="space-y-1.5 bg-black/30 rounded-lg p-3 border border-line">
+            <label class="text-xs uppercase tracking-wider text-silver">Diseño / Estampado (opcional)</label>
+            <select id="pos-diseno" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
+              <option value="">Sin diseño</option>
+            </select>
+            <p id="pos-diseno-extra-info" class="text-xs text-emerald-400" hidden></p>
+          </div>
+
+          <button id="btn-add-cart" disabled class="btn-primary w-full rounded-lg px-4 py-3 text-sm disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+            Agregar al carrito
+          </button>
+        </div>
+
+        <!-- Carrito + checkout -->
+        <div class="lg:col-span-2 glass rounded-2xl p-6 flex flex-col anim-slide-up stagger-2">
+          <h3 class="font-semibold tracking-wide mb-4">Resumen de Venta</h3>
+          <div id="cart-items" class="flex-1 space-y-2 min-h-[120px] max-h-[320px] overflow-y-auto pr-1">
+            <p class="text-zinc-600 text-sm text-center py-10">El carrito está vacío.</p>
+          </div>
+
+          <div class="border-t border-line pt-4 mt-4 space-y-3">
+            <div class="flex justify-between text-sm text-silver">
+              <span>Prendas</span><span id="cart-count">0</span>
+            </div>
+            <div class="flex justify-between items-baseline">
+              <span class="text-sm text-silver">Total</span>
+              <span id="cart-total" class="font-display text-2xl">$0.00</span>
+            </div>
+
+            <div>
+              <label class="text-xs uppercase tracking-wider text-silver">Método de Pago</label>
+              <select id="pos-metodo" class="input-dark w-full rounded-lg px-3 py-3 text-sm mt-1.5">
+                <option>Efectivo (USD/Bs)</option>
+                <option>Transferencia</option>
+                <option>Pago Móvil</option>
+                <option>Zelle</option>
+                <option>Punto de Venta</option>
+              </select>
+            </div>
+
+            <button id="btn-complete-sale" disabled class="btn-primary w-full rounded-lg px-4 py-3.5 text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed">
+              Completar Venta
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- HISTORIAL / FACTURACIÓN (detalle) ---------- -->
+    <section id="section-historial" class="p-5 md:p-10 space-y-6" hidden>
+      <header class="anim-slide-up">
+        <h2 class="font-display text-3xl md:text-4xl tracking-wide">HISTORIAL &amp; FACTURACIÓN</h2>
+        <p class="text-silver text-sm mt-1">Consulta y reimprime cualquier recibo emitido por Spot Club.</p>
+      </header>
+
+      <div class="glass rounded-2xl p-4 flex flex-wrap gap-3 items-center anim-slide-up">
+        <input id="hist2-search" type="text" placeholder="Buscar venta…" class="input-dark rounded-lg px-3 py-2.5 text-sm flex-1 min-w-[200px]" />
+        <select id="hist2-date-filter" class="input-dark rounded-lg px-3 py-2.5 text-sm">
+          <option value="hoy">Hoy</option>
+          <option value="7d">Últimos 7 días</option>
+          <option value="mes">Este mes</option>
+          <option value="todo" selected>Todo</option>
+        </select>
+      </div>
+
+      <div class="glass rounded-2xl overflow-hidden anim-slide-up">
+        <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+          <table class="sc-table w-full text-sm">
+            <thead>
+              <tr class="text-left text-silver text-xs uppercase tracking-wider border-b border-line">
+                <th class="px-6 py-3">Folio</th>
+                <th class="px-6 py-3">Fecha</th>
+                <th class="px-6 py-3">Prendas</th>
+                <th class="px-6 py-3">Método</th>
+                <th class="px-6 py-3 text-right">Total</th>
+                <th class="px-6 py-3 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="history2-tbody">
+              <tr><td colspan="6" class="px-6 py-10 text-center text-zinc-600 text-sm">Sin ventas registradas todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------- CUENTAS & CAJA ---------- -->
+    <section id="section-cuentas" class="p-5 md:p-10 space-y-6" hidden>
+      <header class="anim-slide-up">
+        <h2 class="font-display text-3xl md:text-4xl tracking-wide">CUENTAS &amp; CAJA</h2>
+        <p class="text-silver text-sm mt-1">Registro manual de tus saldos en Banco (Bs) y Binance (USDT). No se conecta a ningún banco: es solo para llevar la cuenta de lo guardado, lo gastado y por qué.</p>
+      </header>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <!-- Banco Bs -->
+        <div class="glass rounded-2xl p-6 anim-slide-up">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-[11px] uppercase tracking-widest text-silver">Banco</p>
+              <p id="saldo-bs" class="font-display text-3xl sm:text-4xl mt-1 truncate">Bs 0,00</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5 text-silver" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-5">
+            <button data-mov="ingreso" data-cuenta="bs" class="btn-ghost rounded-lg px-3 py-2.5 text-xs flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Ingreso
+            </button>
+            <button data-mov="gasto" data-cuenta="bs" class="btn-danger rounded-lg px-3 py-2.5 text-xs flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/></svg>
+              Gasto
+            </button>
+          </div>
+          <button data-conv="bs_to_usdt" class="btn-primary w-full rounded-lg px-3 py-2.5 text-xs mt-2 flex items-center justify-center gap-2">
+            Pasar a Binance
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+
+        <!-- Binance USDT -->
+        <div class="glass rounded-2xl p-6 anim-slide-up stagger-2">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-[11px] uppercase tracking-widest text-silver">Binance</p>
+              <p id="saldo-binance" class="font-display text-3xl sm:text-4xl mt-1 truncate">0,00 USDT</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-black/40 flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5 text-silver" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 12l8 10 8-10z"/><path d="M12 2v20M4 12h16"/></svg>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 mt-5">
+            <button data-mov="ingreso" data-cuenta="binance" class="btn-ghost rounded-lg px-3 py-2.5 text-xs flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Ingreso
+            </button>
+            <button data-mov="gasto" data-cuenta="binance" class="btn-danger rounded-lg px-3 py-2.5 text-xs flex items-center justify-center gap-1.5">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/></svg>
+              Gasto
+            </button>
+          </div>
+          <button data-conv="usdt_to_bs" class="btn-primary w-full rounded-lg px-3 py-2.5 text-xs mt-2 flex items-center justify-center gap-2">
+            Pasar a Bs
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Historial de movimientos -->
+      <div class="glass rounded-2xl overflow-hidden anim-slide-up">
+        <div class="p-6 pb-4 flex items-center justify-between flex-wrap gap-3">
+          <h3 class="font-semibold tracking-wide">Historial de Movimientos</h3>
+          <div class="flex gap-2 flex-wrap">
+            <select id="mov-filter-cuenta" class="input-dark rounded-lg px-3 py-2 text-xs">
+              <option value="">Todas las cuentas</option>
+              <option value="bs">Banco (Bs)</option>
+              <option value="binance">Binance (USDT)</option>
+            </select>
+            <select id="mov-filter-tipo" class="input-dark rounded-lg px-3 py-2 text-xs">
+              <option value="">Todos los tipos</option>
+              <option value="ingreso">Ingresos</option>
+              <option value="gasto">Gastos</option>
+              <option value="conversion">Conversiones</option>
+            </select>
+          </div>
+        </div>
+        <div class="overflow-x-auto max-h-[480px] overflow-y-auto">
+          <table class="sc-table w-full text-sm">
+            <thead>
+              <tr class="text-left text-silver text-xs uppercase tracking-wider border-b border-line">
+                <th class="px-6 py-3">Fecha</th>
+                <th class="px-6 py-3">Tipo</th>
+                <th class="px-6 py-3">Cuenta</th>
+                <th class="px-6 py-3 text-right">Monto</th>
+                <th class="px-6 py-3">Motivo</th>
+              </tr>
+            </thead>
+            <tbody id="mov-tbody">
+              <tr><td colspan="5" class="px-6 py-10 text-center text-zinc-600 text-sm">Sin movimientos registrados todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ==================== MODAL: PRODUCTO (crear/editar) ==================== -->
+<div id="product-modal" hidden class="fixed inset-0 z-[70] flex items-center justify-center p-4 modal-backdrop">
+  <div class="glass-strong rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto anim-scale-in">
+    <form id="product-form" class="p-6 md:p-8 space-y-5">
+      <div class="flex items-center justify-between">
+        <h3 id="product-modal-title" class="font-display text-2xl tracking-wide">NUEVA PRENDA</h3>
+        <button type="button" id="close-product-modal" class="btn-ghost rounded-lg p-2">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <input type="hidden" id="product-id" />
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label class="text-xs uppercase tracking-wider text-silver">Nombre de la prenda</label>
+          <input required id="product-nombre" type="text" placeholder="Ej. Hoodie Spot Club Classic" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+        </div>
+
+        <div>
+          <label class="text-xs uppercase tracking-wider text-silver">Categoría / Tipo de prenda</label>
+          <input required id="product-categoria" list="categoria-options" type="text" placeholder="Ej. Hoodie" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <datalist id="categoria-options">
+            <option value="Franela"></option>
+            <option value="Hoodie"></option>
+            <option value="Pantalón"></option>
+            <option value="Gorra"></option>
+            <option value="Short"></option>
+            <option value="Chaqueta"></option>
+            <option value="Camisa"></option>
+          </datalist>
+        </div>
+
+        <div>
+          <label class="text-xs uppercase tracking-wider text-silver">Material / Tela</label>
+          <input required id="product-material" list="material-options" type="text" placeholder="Ej. Algodón Peinado" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <datalist id="material-options">
+            <option value="Algodón"></option>
+            <option value="Microdurazno"></option>
+            <option value="Poliéster"></option>
+            <option value="Fleece"></option>
+            <option value="Algodón Peinado"></option>
+            <option value="Piqué"></option>
+          </datalist>
+        </div>
+
+        <div>
+          <label class="text-xs uppercase tracking-wider text-silver">Precio de Costo ($)</label>
+          <input required id="product-costo" type="text" inputmode="decimal" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+        </div>
+        <div>
+          <label class="text-xs uppercase tracking-wider text-silver">Precio de Venta ($)</label>
+          <input required id="product-precio" type="text" inputmode="decimal" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs uppercase tracking-wider text-silver mb-2 block">Matriz de Tallas y Stock</label>
+        <div id="size-matrix" class="grid grid-cols-4 sm:grid-cols-8 gap-2"></div>
+      </div>
+
+      <label class="flex items-start gap-2.5 text-sm text-silver cursor-pointer select-none bg-black/30 rounded-lg px-3 py-3 border border-line">
+        <input type="checkbox" id="product-aplica-diseno" class="accent-white w-4 h-4 mt-0.5" />
+        <span>Esta prenda lleva diseño / estampado <span class="block text-xs text-zinc-500 mt-0.5">Ej. franela algodón, franela microdurazno, hoodies. En el Punto de Venta podrás elegir el tamaño del estampado (10x10, 22x28, 28x36, 40x40 cm) y su precio se suma a cada unidad.</span></span>
+      </label>
+
+      <div class="flex justify-end gap-3 pt-2">
+        <button type="button" id="cancel-product" class="btn-ghost rounded-lg px-5 py-2.5 text-sm">Cancelar</button>
+        <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Guardar Prenda</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: RECIBO / FACTURA ==================== -->
+<div id="receipt-modal" hidden class="fixed inset-0 z-[80] flex items-center justify-center p-4 modal-backdrop">
+  <div class="glass-strong rounded-2xl w-full max-w-md max-h-[92vh] overflow-y-auto anim-scale-in">
+    <div class="p-6 text-center border-b border-line">
+      <div class="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center mx-auto anim-check">
+        <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>
+      </div>
+      <h3 class="font-display text-2xl mt-4 tracking-wide">VENTA COMPLETADA</h3>
+      <p id="receipt-stock-note" class="text-silver text-xs mt-1">El stock fue actualizado automáticamente.</p>
+    </div>
+
+    <div id="receipt-print-area" class="p-6 space-y-4 text-sm">
+      <div class="text-center">
+        <h4 class="font-display text-2xl tracking-widest">SPOT CLUB</h4>
+        <p class="text-[11px] text-silver mt-1">Comprobante de Venta Interno</p>
+      </div>
+      <div class="flex justify-between text-xs text-silver border-t border-b border-line py-2">
+        <span id="receipt-folio">Folio: —</span>
+        <span id="receipt-date">—</span>
+      </div>
+      <div id="receipt-items" class="space-y-2"></div>
+      <div class="border-t border-line pt-3 flex justify-between items-baseline">
+        <span class="text-silver text-xs uppercase tracking-wider">Total</span>
+        <span id="receipt-total" class="font-display text-xl">$0.00</span>
+      </div>
+      <div class="flex justify-between text-xs text-silver">
+        <span>Método de pago</span>
+        <span id="receipt-metodo" class="text-white">—</span>
+      </div>
+      <p class="text-center text-[10px] text-zinc-600 pt-3">Gracias por su compra — Spot Club</p>
+    </div>
+
+    <div class="p-6 pt-2 flex gap-3">
+      <button id="btn-print-receipt" class="btn-ghost flex-1 rounded-lg px-4 py-3 text-sm flex items-center justify-center gap-2">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+        Imprimir
+      </button>
+      <button id="btn-close-receipt" class="btn-primary flex-1 rounded-lg px-4 py-3 text-sm">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: CONFIRMAR ELIMINACIÓN ==================== -->
+<div id="confirm-modal" hidden class="fixed inset-0 z-[80] flex items-center justify-center p-4 modal-backdrop">
+  <div class="glass-strong rounded-2xl w-full max-w-sm p-6 anim-scale-in text-center">
+    <h3 class="font-display text-xl tracking-wide">¿ELIMINAR PRENDA?</h3>
+    <p id="confirm-text" class="text-silver text-sm mt-2">Esta acción no se puede deshacer.</p>
+    <div class="flex gap-3 mt-6">
+      <button id="confirm-cancel" class="btn-ghost flex-1 rounded-lg px-4 py-2.5 text-sm">Cancelar</button>
+      <button id="confirm-ok" class="btn-danger flex-1 rounded-lg px-4 py-2.5 text-sm">Eliminar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MODAL: INGRESO / GASTO DE CUENTA ==================== -->
+<div id="mov-modal" hidden class="fixed inset-0 z-[75] flex items-center justify-center p-4 modal-backdrop">
+  <div class="glass-strong rounded-2xl w-full max-w-sm anim-scale-in">
+    <form id="mov-form" class="p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 id="mov-modal-title" class="font-display text-xl tracking-wide">INGRESO</h3>
+        <button type="button" id="close-mov-modal" class="btn-ghost rounded-lg p-2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <p id="mov-modal-subtitle" class="text-silver text-xs -mt-2">Banco (Bs)</p>
+
+      <div>
+        <label class="text-xs uppercase tracking-wider text-silver">Monto</label>
+        <input required id="mov-monto" type="text" inputmode="decimal" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+      </div>
+      <div>
+        <label id="mov-motivo-label" class="text-xs uppercase tracking-wider text-silver">Motivo (opcional)</label>
+        <textarea id="mov-motivo" rows="2" placeholder="¿Por qué?" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5 resize-none"></textarea>
+      </div>
+
+      <div class="flex justify-end gap-3 pt-1">
+        <button type="button" id="cancel-mov" class="btn-ghost rounded-lg px-5 py-2.5 text-sm">Cancelar</button>
+        <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Registrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: CONVERSIÓN BS ⇄ BINANCE ==================== -->
+<div id="conv-modal" hidden class="fixed inset-0 z-[75] flex items-center justify-center p-4 modal-backdrop">
+  <div class="glass-strong rounded-2xl w-full max-w-sm anim-scale-in">
+    <form id="conv-form" class="p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 id="conv-modal-title" class="font-display text-xl tracking-wide">BS → BINANCE</h3>
+        <button type="button" id="close-conv-modal" class="btn-ghost rounded-lg p-2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <p class="text-silver text-xs -mt-2">Registra manualmente cuánto convertiste y cuánto recibiste. La tasa la manejas tú.</p>
+
+      <div>
+        <label id="conv-origen-label" class="text-xs uppercase tracking-wider text-silver">Monto en Bs</label>
+        <input required id="conv-monto-origen" type="text" inputmode="decimal" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+      </div>
+      <div>
+        <label id="conv-destino-label" class="text-xs uppercase tracking-wider text-silver">USDT recibidos</label>
+        <input required id="conv-monto-destino" type="text" inputmode="decimal" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+      </div>
+      <p id="conv-tasa-preview" class="text-xs text-zinc-500 -mt-1 min-h-[1em]"></p>
+      <div>
+        <label class="text-xs uppercase tracking-wider text-silver">Motivo (opcional)</label>
+        <input id="conv-motivo" type="text" placeholder="Ej. Ahorro en USDT" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+      </div>
+
+      <div class="flex justify-end gap-3 pt-1">
+        <button type="button" id="cancel-conv" class="btn-ghost rounded-lg px-5 py-2.5 text-sm">Cancelar</button>
+        <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Convertir</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== TOASTS ==================== -->
+<div id="toast-container" class="fixed bottom-5 right-5 z-[90] space-y-2 w-[90vw] max-w-sm"></div>
+
+<!-- ==================================================================
+     SCRIPT PRINCIPAL — Spot Club Admin
+     ================================================================== -->
+<script type="module">
+/* ============================================================
+   1) FIREBASE — CONFIGURACIÓN
+   ------------------------------------------------------------
+   Pega aquí tu objeto de configuración de Firebase (Firestore).
+   Lo obtienes en: Firebase Console > Configuración del proyecto >
+   Tus apps > SDK setup and configuration > Config.
+
+   const firebaseConfig = {
+     apiKey: "TU_API_KEY",
+     authDomain: "tu-proyecto.firebaseapp.com",
+     projectId: "tu-proyecto",
+     storageBucket: "tu-proyecto.appspot.com",
+     messagingSenderId: "000000000000",
+     appId: "1:000000000000:web:xxxxxxxxxxxxxxxxxxxxxx"
+   };
+   ============================================================ */
+
+const firebaseConfig = {
+  apiKey: "AIzaSyALB-pQkE_Y0VBD7tqO1YC5C5X1vtz9Lic",
+  authDomain: "spot-club-inventario.firebaseapp.com",
+  projectId: "spot-club-inventario",
+  storageBucket: "spot-club-inventario.firebasestorage.app",
+  messagingSenderId: "89313528113",
+  appId: "1:89313528113:web:39d4251ddd7140d7060810"
+};
+
+const isConfigPlaceholder = firebaseConfig.apiKey === "TU_API_KEY";
+
+let app, db;
+let fb = {}; // funciones de firestore importadas dinámicamente
+
+async function initFirebase() {
+  if (isConfigPlaceholder) {
+    document.getElementById('config-banner').hidden = false;
+    setConnState('offline', 'Sin configurar');
+    return false;
+  }
+  try {
+    const appMod = await import("https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js");
+    const fsMod = await import("https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js");
+    fb = fsMod;
+    app = appMod.initializeApp(firebaseConfig);
+    db = fsMod.getFirestore(app);
+    setConnState('online', 'Firestore conectado');
+    listenProducts();
+    listenSales();
+    listenAccounts();
+    listenMovimientos();
+    listenDesignPrices();
+    return true;
+  } catch (err) {
+    console.error('Error inicializando Firebase:', err);
+    setConnState('error', 'Error de conexión');
+    showToast('No se pudo conectar a Firebase. Revisa tu firebaseConfig.', 'error');
+    return false;
+  }
+}
+
+function setConnState(state, label) {
+  const dot = document.getElementById('conn-dot');
+  const lbl = document.getElementById('conn-label');
+  lbl.textContent = label;
+  dot.className = 'w-2 h-2 rounded-full ' + (
+    state === 'online' ? 'bg-emerald-400 pulse-dot' :
+    state === 'error' ? 'bg-red-500' : 'bg-zinc-600'
+  );
+}
+
+/* ============================================================
+   2) ESTADO GLOBAL
+   ============================================================ */
+const SIZES = ['16', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
+const PAYMENT_METHODS = ['Efectivo (USD/Bs)', 'Transferencia', 'Pago Móvil', 'Zelle', 'Punto de Venta'];
+const LOW_STOCK_THRESHOLD = 5;
+const DESIGN_SIZES = ['10x10', '22x28', '28x36', '40x40'];
+
+let products = [];
+let sales = [];
+let cart = [];
+let currentSection = 'dashboard';
+let pendingDeleteId = null;
+let selectedSizesInForm = new Set();
+let posMode = 'inventario'; // 'inventario' | 'pedido'
+let posCustomItem = false; // producto fuera del catálogo (solo en modo pedido)
+let designPrices = { '10x10': 0, '22x28': 0, '28x36': 0, '40x40': 0 };
+
+// Cuentas & Caja (registro manual, no conectado a ningún banco real)
+let accounts = { bs: 0, binance: 0 };
+let movimientos = [];
+let currentMovTipo = null;
+let currentMovCuenta = null;
+let currentConvDireccion = null;
+const CUENTA_LABEL = { bs: 'Banco (Bs)', binance: 'Binance (USDT)' };
+const TIPO_LABEL = { ingreso: 'Ingreso', gasto: 'Gasto', conversion: 'Conversión' };
+
+/* ============================================================
+   3) UTILIDADES
+   ============================================================ */
+const fmtMoney = (n) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Lee montos escritos con coma o con punto decimal (10,50 / 1.234,56 / 10.50) y siempre devuelve un número válido.
+function parseMoneyInput(raw) {
+  let s = String(raw ?? '').trim();
+  if (!s) return 0;
+  s = s.replace(/[^0-9.,-]/g, '');
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma > -1 && lastDot > -1) {
+    if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (lastComma > -1) {
+    s = s.replace(',', '.');
+  }
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+}
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString('es-VE', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : '—';
+const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function totalStock(product) {
+  return Object.values(product.tallas || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+}
+function hasLowStock(product) {
+  return Object.values(product.tallas || {}).some((s) => Number(s) > 0 && Number(s) <= LOW_STOCK_THRESHOLD);
+}
+
+function showToast(message, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const icon = type === 'success'
+    ? '<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>'
+    : type === 'error'
+    ? '<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.14A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>'
+    : '<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>';
+  const colors = type === 'success' ? 'border-white/20' : type === 'error' ? 'border-red-500/40' : 'border-white/20';
+  const el = document.createElement('div');
+  el.className = `anim-toast glass-strong ${colors} rounded-xl px-4 py-3 flex items-center gap-3 text-sm shadow-glow`;
+  el.innerHTML = `${icon}<span>${escapeHtml(message)}</span>`;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.transition = 'opacity .3s ease, transform .3s ease';
+    el.style.opacity = '0';
+    el.style.transform = 'translateX(24px)';
+    setTimeout(() => el.remove(), 300);
+  }, 3200);
+}
+
+/* ============================================================
+   4) NAVEGACIÓN
+   ============================================================ */
+function switchSection(name) {
+  currentSection = name;
+  ['dashboard', 'inventario', 'pos', 'historial', 'cuentas'].forEach((s) => {
+    const el = document.getElementById('section-' + s);
+    if (s === name) { el.hidden = false; el.classList.add('anim-fade-in'); }
+    else el.hidden = true;
+  });
+  document.querySelectorAll('.nav-item').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.section === name);
+  });
+  document.getElementById('mobile-nav').hidden = true;
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'historial') renderHistorial2();
+  if (name === 'cuentas') { renderAccountBalances(); renderMovimientos(); }
+}
+
+document.querySelectorAll('.nav-item, .nav-item-mobile').forEach((btn) => {
+  btn.addEventListener('click', () => switchSection(btn.dataset.section));
+});
+document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+  const nav = document.getElementById('mobile-nav');
+  nav.hidden = !nav.hidden;
+});
+document.getElementById('mobile-nav').addEventListener('click', (e) => {
+  if (e.target.id === 'mobile-nav') e.currentTarget.hidden = true;
+});
+document.getElementById('year-tag').textContent = new Date().getFullYear();
+
+/* ============================================================
+   5) FIRESTORE — LISTENERS EN TIEMPO REAL
+   ============================================================ */
+function listenProducts() {
+  const colRef = fb.collection(db, 'products');
+  fb.onSnapshot(colRef, (snap) => {
+    products = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderInventory();
+    renderPOSProductOptions();
+  }, (err) => {
+    console.error(err);
+    showToast('Error al cargar inventario en tiempo real.', 'error');
+  });
+}
+
+function listenSales() {
+  const colRef = fb.collection(db, 'sales');
+  const q = fb.query(colRef, fb.orderBy('fecha', 'desc'));
+  fb.onSnapshot(q, (snap) => {
+    sales = snap.docs.map((d) => {
+      const data = d.data();
+      return { id: d.id, ...data, fecha: data.fecha && data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha) };
+    });
+    if (currentSection === 'dashboard') renderDashboard();
+    if (currentSection === 'historial') renderHistorial2();
+  }, (err) => {
+    console.error(err);
+    showToast('Error al cargar ventas en tiempo real.', 'error');
+  });
+}
+
+function listenAccounts() {
+  const colRef = fb.collection(db, 'accounts');
+  fb.onSnapshot(colRef, (snap) => {
+    snap.docs.forEach((d) => { accounts[d.id] = d.data().saldo || 0; });
+    renderAccountBalances();
+  }, (err) => {
+    console.error(err);
+    showToast('Error al cargar cuentas en tiempo real.', 'error');
+  });
+}
+
+function listenMovimientos() {
+  const colRef = fb.collection(db, 'movimientos');
+  const q = fb.query(colRef, fb.orderBy('fecha', 'desc'));
+  fb.onSnapshot(q, (snap) => {
+    movimientos = snap.docs.map((d) => {
+      const data = d.data();
+      return { id: d.id, ...data, fecha: data.fecha && data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha) };
+    });
+    renderMovimientos();
+  }, (err) => {
+    console.error(err);
+    showToast('Error al cargar movimientos en tiempo real.', 'error');
+  });
+}
+
+function listenDesignPrices() {
+  const ref = fb.doc(db, 'settings', 'disenos');
+  fb.onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      const d = snap.data();
+      designPrices = {
+        '10x10': Number(d.s10x10) || 0,
+        '22x28': Number(d.s22x28) || 0,
+        '28x36': Number(d.s28x36) || 0,
+        '40x40': Number(d.s40x40) || 0,
+      };
+    }
+    renderDesignPricesForm();
+    refreshPosDisenoOptions();
+  }, (err) => {
+    console.error(err);
+    showToast('Error al cargar precios de diseño.', 'error');
+  });
+}
+
+/* ============================================================
+   6) INVENTARIO — CRUD
+   ============================================================ */
+function buildSizeMatrix(existingTallas = {}) {
+  selectedSizesInForm = new Set(Object.keys(existingTallas));
+  const wrap = document.getElementById('size-matrix');
+  wrap.innerHTML = SIZES.map((size) => {
+    const checked = existingTallas[size] !== undefined;
+    const stock = existingTallas[size] ?? '';
+    return `
+      <div class="flex flex-col items-center gap-1.5">
+        <button type="button" data-size="${size}" class="chip-size ${checked ? 'selected' : ''} w-full text-center py-2 rounded-lg border border-line text-xs font-medium">
+          ${size}
+        </button>
+        <input type="number" min="0" data-size-stock="${size}" placeholder="0"
+          value="${stock}"
+          class="input-dark w-full rounded-md px-2 py-1.5 text-xs text-center ${checked ? '' : 'opacity-40'}"
+          ${checked ? '' : 'disabled'} />
+      </div>`;
+  }).join('');
+
+  wrap.querySelectorAll('.chip-size').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const size = btn.dataset.size;
+      const input = wrap.querySelector(`[data-size-stock="${size}"]`);
+      if (selectedSizesInForm.has(size)) {
+        selectedSizesInForm.delete(size);
+        btn.classList.remove('selected');
+        input.disabled = true;
+        input.classList.add('opacity-40');
+      } else {
+        selectedSizesInForm.add(size);
+        btn.classList.add('selected');
+        input.disabled = false;
+        input.classList.remove('opacity-40');
+        input.focus();
+      }
+    });
+  });
+}
+
+function openProductModal(product = null) {
+  const form = document.getElementById('product-form');
+  form.reset();
+  document.getElementById('product-modal-title').textContent = product ? 'EDITAR PRENDA' : 'NUEVA PRENDA';
+  document.getElementById('product-id').value = product?.id || '';
+  document.getElementById('product-nombre').value = product?.nombre || '';
+  document.getElementById('product-categoria').value = product?.categoria || '';
+  document.getElementById('product-material').value = product?.material || '';
+  document.getElementById('product-costo').value = product?.precioCosto ?? '';
+  document.getElementById('product-precio').value = product?.precioVenta ?? '';
+  document.getElementById('product-aplica-diseno').checked = !!product?.aplicaDiseno;
+  buildSizeMatrix(product?.tallas || {});
+  document.getElementById('product-modal').hidden = false;
+}
+function closeProductModal() { document.getElementById('product-modal').hidden = true; }
+
+document.getElementById('btn-new-product').addEventListener('click', () => openProductModal());
+document.getElementById('close-product-modal').addEventListener('click', closeProductModal);
+document.getElementById('cancel-product').addEventListener('click', closeProductModal);
+document.getElementById('product-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'product-modal') closeProductModal();
+});
+
+document.getElementById('product-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!db) { showToast('Configura Firebase antes de guardar prendas.', 'error'); return; }
+  if (selectedSizesInForm.size === 0) { showToast('Selecciona al menos una talla.', 'error'); return; }
+
+  const tallas = {};
+  document.querySelectorAll('#size-matrix [data-size-stock]').forEach((input) => {
+    const size = input.dataset.sizeStock;
+    if (selectedSizesInForm.has(size)) tallas[size] = Number(input.value) || 0;
+  });
+
+  const id = document.getElementById('product-id').value;
+  const payload = {
+    nombre: document.getElementById('product-nombre').value.trim(),
+    categoria: document.getElementById('product-categoria').value.trim(),
+    material: document.getElementById('product-material').value.trim(),
+    precioCosto: parseMoneyInput(document.getElementById('product-costo').value),
+    precioVenta: parseMoneyInput(document.getElementById('product-precio').value),
+    aplicaDiseno: document.getElementById('product-aplica-diseno').checked,
+    tallas,
+    updatedAt: fb.serverTimestamp(),
+  };
+
+  try {
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    if (id) {
+      await fb.updateDoc(fb.doc(db, 'products', id), payload);
+      showToast('Prenda actualizada correctamente.');
+    } else {
+      payload.createdAt = fb.serverTimestamp();
+      await fb.addDoc(fb.collection(db, 'products'), payload);
+      showToast('Prenda registrada en el catálogo.');
+    }
+    submitBtn.disabled = false;
+    closeProductModal();
+  } catch (err) {
+    console.error(err);
+    showToast('Error al guardar la prenda.', 'error');
+  }
+});
+
+function askDeleteProduct(id, nombre) {
+  pendingDeleteId = id;
+  document.getElementById('confirm-text').textContent = `"${nombre}" se eliminará permanentemente del catálogo.`;
+  document.getElementById('confirm-modal').hidden = false;
+}
+document.getElementById('confirm-cancel').addEventListener('click', () => {
+  pendingDeleteId = null;
+  document.getElementById('confirm-modal').hidden = true;
+});
+document.getElementById('confirm-ok').addEventListener('click', async () => {
+  if (!pendingDeleteId) return;
+  try {
+    await fb.deleteDoc(fb.doc(db, 'products', pendingDeleteId));
+    showToast('Prenda eliminada.');
+  } catch (err) {
+    console.error(err);
+    showToast('Error al eliminar la prenda.', 'error');
+  }
+  pendingDeleteId = null;
+  document.getElementById('confirm-modal').hidden = true;
+});
+
+/* ---------- Precios de Diseño / Estampado ---------- */
+function renderDesignPricesForm() {
+  document.getElementById('precio-10x10').value = designPrices['10x10'] || '';
+  document.getElementById('precio-22x28').value = designPrices['22x28'] || '';
+  document.getElementById('precio-28x36').value = designPrices['28x36'] || '';
+  document.getElementById('precio-40x40').value = designPrices['40x40'] || '';
+}
+
+document.getElementById('design-prices-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!db) { showToast('Configura Firebase antes de guardar precios.', 'error'); return; }
+  const payload = {
+    s10x10: parseMoneyInput(document.getElementById('precio-10x10').value),
+    s22x28: parseMoneyInput(document.getElementById('precio-22x28').value),
+    s28x36: parseMoneyInput(document.getElementById('precio-28x36').value),
+    s40x40: parseMoneyInput(document.getElementById('precio-40x40').value),
+    updatedAt: fb.serverTimestamp(),
+  };
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  try {
+    await fb.setDoc(fb.doc(db, 'settings', 'disenos'), payload, { merge: true });
+    showToast('Precios de diseño actualizados.');
+  } catch (err) {
+    console.error(err);
+    showToast('Error al guardar los precios de diseño.', 'error');
+  }
+  submitBtn.disabled = false;
+});
+
+/* ---------- Render inventario ---------- */
+function populateFilterOptions() {
+  const categorias = [...new Set(products.map((p) => p.categoria).filter(Boolean))].sort();
+  const materiales = [...new Set(products.map((p) => p.material).filter(Boolean))].sort();
+  const catSel = document.getElementById('filter-categoria');
+  const matSel = document.getElementById('filter-material');
+  const curCat = catSel.value, curMat = matSel.value;
+  catSel.innerHTML = '<option value="">Todas las categorías</option>' + categorias.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  matSel.innerHTML = '<option value="">Todos los materiales</option>' + materiales.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
+  catSel.value = curCat; matSel.value = curMat;
+}
+
+function renderInventory() {
+  populateFilterOptions();
+  const search = document.getElementById('filter-search').value.trim().toLowerCase();
+  const cat = document.getElementById('filter-categoria').value;
+  const mat = document.getElementById('filter-material').value;
+  const onlyLow = document.getElementById('filter-low-stock').checked;
+
+  const filtered = products.filter((p) => {
+    if (search && !(p.nombre || '').toLowerCase().includes(search)) return false;
+    if (cat && p.categoria !== cat) return false;
+    if (mat && p.material !== mat) return false;
+    if (onlyLow && !hasLowStock(p)) return false;
+    return true;
+  }).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+
+  const grid = document.getElementById('product-grid');
+  document.getElementById('product-empty').hidden = filtered.length !== 0;
+
+  grid.innerHTML = filtered.map((p, i) => {
+    const margen = p.precioVenta ? (((p.precioVenta - p.precioCosto) / p.precioVenta) * 100).toFixed(0) : '0';
+    const stock = totalStock(p);
+    const sizeChips = SIZES.filter((s) => p.tallas && p.tallas[s] !== undefined).map((s) => {
+      const qty = p.tallas[s];
+      const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+      const empty = qty === 0;
+      const cls = empty ? 'border-red-900 text-red-500 bg-red-950/30' : low ? 'border-amber-700 text-amber-400 bg-amber-950/20' : 'border-line text-silver';
+      return `<span class="text-[10px] px-1.5 py-1 rounded border ${cls}">${s}:${qty}</span>`;
+    }).join('');
+
+    return `
+      <div class="glass rounded-2xl p-5 card-press anim-slide-up stagger-${(i % 5) + 1}">
+        <div class="flex justify-between items-start gap-2">
+          <div>
+            <h4 class="font-semibold leading-tight">${escapeHtml(p.nombre)}</h4>
+            <p class="text-[11px] text-silver mt-0.5">${escapeHtml(p.categoria)} · ${escapeHtml(p.material)}</p>
+          </div>
+          <div class="flex flex-col items-end gap-1 shrink-0">
+            ${hasLowStock(p) ? '<span class="text-[10px] px-2 py-1 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Stock bajo</span>' : ''}
+            ${p.aplicaDiseno ? '<span class="text-[10px] px-2 py-1 rounded-full bg-white/5 text-silver border border-line">Con diseño</span>' : ''}
+          </div>
+        </div>
+
+        <div class="flex flex-wrap gap-1.5 mt-3">${sizeChips || '<span class="text-[10px] text-zinc-600">Sin tallas registradas</span>'}</div>
+
+        <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+          <div class="bg-black/40 rounded-lg py-2">
+            <p class="text-[10px] text-zinc-500 uppercase">Costo</p>
+            <p class="text-sm font-medium">${fmtMoney(p.precioCosto)}</p>
+          </div>
+          <div class="bg-black/40 rounded-lg py-2">
+            <p class="text-[10px] text-zinc-500 uppercase">Venta</p>
+            <p class="text-sm font-medium">${fmtMoney(p.precioVenta)}</p>
+          </div>
+          <div class="bg-black/40 rounded-lg py-2">
+            <p class="text-[10px] text-zinc-500 uppercase">Margen</p>
+            <p class="text-sm font-medium">${margen}%</p>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between mt-4">
+          <span class="text-xs text-zinc-500">Stock total: <span class="text-white font-medium">${stock}</span> uds.</span>
+          <div class="flex gap-2">
+            <button data-edit="${p.id}" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">Editar</button>
+            <button data-del="${p.id}" data-name="${escapeHtml(p.nombre)}" class="btn-danger rounded-lg px-3 py-1.5 text-xs">Eliminar</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  grid.querySelectorAll('[data-edit]').forEach((btn) => btn.addEventListener('click', () => {
+    const p = products.find((x) => x.id === btn.dataset.edit);
+    if (p) openProductModal(p);
+  }));
+  grid.querySelectorAll('[data-del]').forEach((btn) => btn.addEventListener('click', () => {
+    askDeleteProduct(btn.dataset.del, btn.dataset.name);
+  }));
+}
+
+['filter-search', 'filter-categoria', 'filter-material'].forEach((id) => {
+  document.getElementById(id).addEventListener('input', renderInventory);
+  document.getElementById(id).addEventListener('change', renderInventory);
+});
+document.getElementById('filter-low-stock').addEventListener('change', renderInventory);
+
+/* ============================================================
+   7) POS — CARRITO Y VENTA
+   ============================================================ */
+
+/* ---------- Diseño / Estampado en el POS ---------- */
+function refreshPosDisenoOptions() {
+  const sel = document.getElementById('pos-diseno');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Sin diseño</option>' +
+    DESIGN_SIZES.map((s) => `<option value="${s}">${s} cm — +${fmtMoney(designPrices[s] || 0)}</option>`).join('');
+  sel.value = DESIGN_SIZES.includes(cur) ? cur : '';
+  updatePosDisenoInfo();
+}
+
+function updatePosDisenoInfo() {
+  const infoEl = document.getElementById('pos-diseno-extra-info');
+  const sel = document.getElementById('pos-diseno');
+  if (!infoEl || !sel) return;
+  const size = sel.value;
+  if (size) {
+    infoEl.textContent = `+ ${fmtMoney(designPrices[size] || 0)} por unidad (diseño ${size} cm)`;
+    infoEl.hidden = false;
+  } else {
+    infoEl.hidden = true;
+  }
+}
+
+function setDisenoVisible(show) {
+  const wrap = document.getElementById('pos-diseno-wrap');
+  if (!wrap) return;
+  wrap.hidden = !show;
+  if (!show) document.getElementById('pos-diseno').value = '';
+  updatePosDisenoInfo();
+}
+
+document.getElementById('pos-diseno').addEventListener('change', updatePosDisenoInfo);
+document.getElementById('pos-custom-aplica-diseno').addEventListener('change', (e) => {
+  setDisenoVisible(e.target.checked);
+});
+
+function setPosMode(mode) {
+  posMode = mode;
+  document.querySelectorAll('.pos-mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+  document.getElementById('pedido-banner').hidden = mode !== 'pedido';
+  document.getElementById('custom-item-toggle-wrap').hidden = mode !== 'pedido';
+  document.getElementById('pos-costo-wrap').hidden = mode !== 'pedido';
+  document.getElementById('pos-talla-label').textContent = mode === 'pedido' ? 'Talla' : 'Talla / Stock disponible';
+
+  posCustomItem = false;
+  document.getElementById('pos-custom-toggle').checked = false;
+  document.getElementById('pos-custom-fields').hidden = true;
+  document.getElementById('pos-catalog-fields').hidden = false;
+  document.getElementById('pos-product').value = '';
+  document.getElementById('pos-custom-nombre').value = '';
+  document.getElementById('pos-custom-categoria').value = '';
+  document.getElementById('pos-custom-material').value = '';
+  document.getElementById('pos-custom-aplica-diseno').checked = false;
+  setDisenoVisible(false);
+
+  renderPOSProductOptions();
+  resetPOSSelectors();
+}
+
+document.querySelectorAll('.pos-mode-btn').forEach((btn) => {
+  btn.addEventListener('click', () => setPosMode(btn.dataset.mode));
+});
+
+document.getElementById('pos-custom-toggle').addEventListener('change', (e) => {
+  posCustomItem = e.target.checked;
+  document.getElementById('pos-catalog-fields').hidden = posCustomItem;
+  document.getElementById('pos-custom-fields').hidden = !posCustomItem;
+  document.getElementById('pos-product').value = '';
+  document.getElementById('pos-custom-aplica-diseno').checked = false;
+  setDisenoVisible(false);
+  resetPOSSelectors();
+});
+
+function renderPOSProductOptions() {
+  const sel = document.getElementById('pos-product');
+  const cur = sel.value;
+  const available = posMode === 'pedido' ? products : products.filter((p) => totalStock(p) > 0);
+  sel.innerHTML = '<option value="">Selecciona una prenda…</option>' +
+    available.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)} — ${escapeHtml(p.material)}</option>`).join('');
+  sel.value = available.some((p) => p.id === cur) ? cur : '';
+  if (sel.value === '' && !posCustomItem) resetPOSSelectors();
+}
+
+function resetPOSSelectors() {
+  const tallaSel = document.getElementById('pos-talla');
+  document.getElementById('pos-product-info').hidden = true;
+
+  if (posMode === 'pedido' && posCustomItem) {
+    // Producto personalizado: todos los campos quedan listos para escribir, sin depender de stock.
+    tallaSel.innerHTML = SIZES.map((s) => `<option value="${s}">${s}</option>`).join('');
+    tallaSel.disabled = false;
+    document.getElementById('pos-cantidad').disabled = false;
+    document.getElementById('pos-cantidad').value = 1;
+    document.getElementById('pos-cantidad').removeAttribute('max');
+    document.getElementById('pos-precio').disabled = false;
+    document.getElementById('pos-precio').value = '';
+    document.getElementById('pos-costo').disabled = false;
+    document.getElementById('pos-costo').value = '';
+    document.getElementById('btn-add-cart').disabled = false;
+    setDisenoVisible(document.getElementById('pos-custom-aplica-diseno').checked);
+    return;
+  }
+
+  tallaSel.innerHTML = '<option value="">—</option>';
+  tallaSel.disabled = true;
+  document.getElementById('pos-cantidad').disabled = true;
+  document.getElementById('pos-cantidad').value = 1;
+  document.getElementById('pos-cantidad').removeAttribute('max');
+  document.getElementById('pos-precio').disabled = true;
+  document.getElementById('pos-precio').value = '';
+  document.getElementById('pos-costo').value = '';
+  document.getElementById('pos-costo').disabled = true;
+  document.getElementById('btn-add-cart').disabled = true;
+  setDisenoVisible(false);
+}
+
+document.getElementById('pos-product').addEventListener('change', (e) => {
+  const product = products.find((p) => p.id === e.target.value);
+  const tallaSel = document.getElementById('pos-talla');
+  if (!product) { resetPOSSelectors(); return; }
+
+  const info = document.getElementById('pos-product-info');
+  info.hidden = false;
+  info.textContent = `${product.categoria} · ${product.material} · Costo: ${fmtMoney(product.precioCosto)}`;
+
+  document.getElementById('pos-precio').value = product.precioVenta;
+  document.getElementById('pos-precio').disabled = false;
+  setDisenoVisible(!!product.aplicaDiseno);
+
+  if (posMode === 'pedido') {
+    // Por pedido: se puede elegir cualquier talla, sin límite de stock.
+    tallaSel.innerHTML = SIZES.map((s) => {
+      const stock = product.tallas && product.tallas[s] !== undefined ? product.tallas[s] : null;
+      return `<option value="${s}">${stock === null ? s : `${s} (${stock} en stock)`}</option>`;
+    }).join('');
+    tallaSel.disabled = false;
+    document.getElementById('pos-cantidad').disabled = false;
+    document.getElementById('pos-cantidad').value = 1;
+    document.getElementById('pos-cantidad').removeAttribute('max');
+    document.getElementById('pos-costo').value = product.precioCosto ?? 0;
+    document.getElementById('pos-costo').disabled = false;
+    document.getElementById('btn-add-cart').disabled = false;
+  } else {
+    const sizesInStock = SIZES.filter((s) => product.tallas && product.tallas[s] > 0);
+    tallaSel.innerHTML = sizesInStock.length
+      ? sizesInStock.map((s) => `<option value="${s}">${s} (${product.tallas[s]} disp.)</option>`).join('')
+      : '<option value="">Sin stock</option>';
+    tallaSel.disabled = sizesInStock.length === 0;
+    document.getElementById('pos-cantidad').disabled = sizesInStock.length === 0;
+    document.getElementById('pos-cantidad').value = 1;
+    document.getElementById('btn-add-cart').disabled = sizesInStock.length === 0;
+  }
+});
+
+document.getElementById('pos-talla').addEventListener('change', () => {
+  if (posMode !== 'inventario') return; // el modo por pedido no limita por stock
+  const productId = document.getElementById('pos-product').value;
+  const product = products.find((p) => p.id === productId);
+  const size = document.getElementById('pos-talla').value;
+  const cantidadInput = document.getElementById('pos-cantidad');
+  if (product && size) {
+    const max = product.tallas[size] || 0;
+    cantidadInput.max = max;
+    if (Number(cantidadInput.value) > max) cantidadInput.value = max;
+  }
+});
+
+document.getElementById('btn-add-cart').addEventListener('click', () => {
+  const talla = document.getElementById('pos-talla').value;
+  const cantidad = Number(document.getElementById('pos-cantidad').value) || 0;
+  const precioUnitario = parseMoneyInput(document.getElementById('pos-precio').value);
+  const disenoTamano = document.getElementById('pos-diseno-wrap').hidden ? null : (document.getElementById('pos-diseno').value || null);
+  const disenoPrecio = disenoTamano ? (Number(designPrices[disenoTamano]) || 0) : 0;
+  const precioFinal = precioUnitario + disenoPrecio;
+
+  // ---- Caso 1: producto personalizado por pedido (fuera del catálogo) ----
+  if (posMode === 'pedido' && posCustomItem) {
+    const nombre = document.getElementById('pos-custom-nombre').value.trim();
+    const categoria = document.getElementById('pos-custom-categoria').value.trim() || 'Personalizado';
+    const material = document.getElementById('pos-custom-material').value.trim() || '—';
+    const costoUnitario = parseMoneyInput(document.getElementById('pos-costo').value);
+
+    if (!nombre || !talla || cantidad < 1 || precioUnitario <= 0) {
+      showToast('Completa nombre, talla, cantidad y precio del producto personalizado.', 'error');
+      return;
+    }
+
+    cart.push({
+      productId: null, nombre, categoria, material, talla, cantidad, precioUnitario, costoUnitario,
+      disenoTamano, disenoPrecio, subtotal: cantidad * precioFinal, porPedido: true,
+    });
+
+    renderCart();
+    showToast(`${nombre} (${talla}) agregado al carrito como pedido.`);
+    document.getElementById('pos-custom-nombre').value = '';
+    document.getElementById('pos-custom-categoria').value = '';
+    document.getElementById('pos-custom-material').value = '';
+    document.getElementById('pos-custom-aplica-diseno').checked = false;
+    resetPOSSelectors();
+    return;
+  }
+
+  // ---- Caso 2 y 3: producto del catálogo (con o sin descuento de stock) ----
+  const productId = document.getElementById('pos-product').value;
+  const product = products.find((p) => p.id === productId);
+  if (!product || !talla || cantidad < 1) { showToast('Completa producto, talla y cantidad.', 'error'); return; }
+
+  if (posMode === 'pedido') {
+    const costoUnitario = parseMoneyInput(document.getElementById('pos-costo').value) || Number(product.precioCosto) || 0;
+    cart.push({
+      productId: product.id, nombre: product.nombre, categoria: product.categoria, material: product.material,
+      talla, cantidad, precioUnitario, costoUnitario, disenoTamano, disenoPrecio,
+      subtotal: cantidad * precioFinal, porPedido: true,
+    });
+    renderCart();
+    showToast(`${product.nombre} (${talla}) agregado como venta por pedido, sin descontar stock.`);
+    document.getElementById('pos-product').value = '';
+    resetPOSSelectors();
+    return;
+  }
+
+  // Modo inventario: comportamiento original, valida y descuenta stock real.
+  const availableStock = product.tallas[talla] || 0;
+  const alreadyInCart = cart.filter((it) => it.productId === product.id && it.talla === talla && !it.porPedido).reduce((a, it) => a + it.cantidad, 0);
+  if (cantidad + alreadyInCart > availableStock) {
+    showToast(`Solo hay ${availableStock} unidades disponibles en talla ${talla}.`, 'error');
+    return;
+  }
+
+  cart.push({
+    productId: product.id,
+    nombre: product.nombre,
+    categoria: product.categoria,
+    material: product.material,
+    talla,
+    cantidad,
+    precioUnitario,
+    costoUnitario: Number(product.precioCosto) || 0,
+    disenoTamano,
+    disenoPrecio,
+    subtotal: cantidad * precioFinal,
+    porPedido: false,
+  });
+
+  renderCart();
+  showToast(`${product.nombre} (${talla}) agregado al carrito.`);
+  document.getElementById('pos-product').value = '';
+  resetPOSSelectors();
+});
+
+function renderCart() {
+  const wrap = document.getElementById('cart-items');
+  if (cart.length === 0) {
+    wrap.innerHTML = '<p class="text-zinc-600 text-sm text-center py-10">El carrito está vacío.</p>';
+  } else {
+    wrap.innerHTML = cart.map((it, i) => `
+      <div class="anim-slide-up flex items-center justify-between gap-2 bg-black/40 rounded-lg px-3 py-2.5">
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <p class="text-sm font-medium truncate">${escapeHtml(it.nombre)}</p>
+            ${it.porPedido ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+          </div>
+          <p class="text-[11px] text-silver">Talla ${it.talla} · x${it.cantidad} · ${fmtMoney(it.precioUnitario)} c/u${it.disenoTamano ? ` · Diseño ${it.disenoTamano}cm (+${fmtMoney(it.disenoPrecio)})` : ''}</p>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <span class="text-sm font-semibold">${fmtMoney(it.subtotal)}</span>
+          <button data-remove="${i}" class="text-zinc-500 hover:text-red-400 transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>`).join('');
+    wrap.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', () => {
+      cart.splice(Number(btn.dataset.remove), 1);
+      renderCart();
+    }));
+  }
+
+  const totalCount = cart.reduce((a, it) => a + it.cantidad, 0);
+  const totalAmount = cart.reduce((a, it) => a + it.subtotal, 0);
+  document.getElementById('cart-count').textContent = totalCount;
+  document.getElementById('cart-total').textContent = fmtMoney(totalAmount);
+  document.getElementById('btn-complete-sale').disabled = cart.length === 0;
+}
+
+document.getElementById('btn-complete-sale').addEventListener('click', async () => {
+  if (!db) { showToast('Configura Firebase antes de registrar ventas.', 'error'); return; }
+  if (cart.length === 0) return;
+  const btn = document.getElementById('btn-complete-sale');
+  btn.disabled = true;
+  btn.textContent = 'Procesando…';
+
+  const metodoPago = document.getElementById('pos-metodo').value;
+  const itemsSnapshot = [...cart];
+  // Solo los ítems del inventario (no marcados "por pedido") descuentan stock real.
+  const stockItems = itemsSnapshot.filter((it) => !it.porPedido && it.productId);
+  const tienePedido = itemsSnapshot.some((it) => it.porPedido);
+
+  try {
+    const saleRef = fb.doc(fb.collection(db, 'sales'));
+    await fb.runTransaction(db, async (transaction) => {
+      const productRefs = stockItems.map((it) => fb.doc(db, 'products', it.productId));
+      const productDocs = await Promise.all(productRefs.map((ref) => transaction.get(ref)));
+
+      productDocs.forEach((docSnap, idx) => {
+        const it = stockItems[idx];
+        if (!docSnap.exists()) throw new Error(`El producto "${it.nombre}" ya no existe.`);
+        const data = docSnap.data();
+        const currentStock = (data.tallas && data.tallas[it.talla]) || 0;
+        if (currentStock < it.cantidad) throw new Error(`Stock insuficiente para ${it.nombre} (talla ${it.talla}).`);
+      });
+
+      productDocs.forEach((docSnap, idx) => {
+        const it = stockItems[idx];
+        const ref = productRefs[idx];
+        const data = docSnap.data();
+        const newTallas = { ...data.tallas, [it.talla]: data.tallas[it.talla] - it.cantidad };
+        transaction.update(ref, { tallas: newTallas });
+      });
+
+      const total = itemsSnapshot.reduce((a, it) => a + it.subtotal, 0);
+      const totalCosto = itemsSnapshot.reduce((a, it) => a + it.costoUnitario * it.cantidad, 0);
+      const cantidadPrendas = itemsSnapshot.reduce((a, it) => a + it.cantidad, 0);
+
+      transaction.set(saleRef, {
+        items: itemsSnapshot,
+        metodoPago,
+        total,
+        totalCosto,
+        gananciaNeta: total - totalCosto,
+        cantidadPrendas,
+        tienePedido,
+        fecha: fb.serverTimestamp(),
+      });
+    });
+
+    showToast(tienePedido ? 'Venta registrada (incluye prendas por pedido, sin descontar stock).' : 'Venta completada y stock actualizado.');
+    showReceipt({ id: saleRef.id, items: itemsSnapshot, metodoPago, total: itemsSnapshot.reduce((a, it) => a + it.subtotal, 0), fecha: new Date(), tienePedido });
+    cart = [];
+    renderCart();
+  } catch (err) {
+    console.error(err);
+    showToast(err.message || 'Error al procesar la venta.', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Completar Venta';
+});
+
+/* ---------- Recibo ---------- */
+function showReceipt(sale) {
+  document.getElementById('receipt-folio').textContent = 'Folio: ' + sale.id.slice(0, 8).toUpperCase();
+  document.getElementById('receipt-date').textContent = fmtDate(sale.fecha) + ' · ' + fmtTime(sale.fecha);
+  document.getElementById('receipt-items').innerHTML = sale.items.map((it) => `
+    <div class="flex justify-between text-xs">
+      <span class="text-silver">${escapeHtml(it.nombre)} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` · Diseño ${it.disenoTamano}cm` : ''}${it.porPedido ? ' <span class="text-amber-400">· Pedido</span>' : ''}</span>
+      <span>${fmtMoney(it.subtotal)}</span>
+    </div>`).join('');
+  document.getElementById('receipt-total').textContent = fmtMoney(sale.total);
+  document.getElementById('receipt-metodo').textContent = sale.metodoPago;
+  const tienePedido = sale.tienePedido ?? sale.items.some((it) => it.porPedido);
+  document.getElementById('receipt-stock-note').textContent = tienePedido
+    ? 'Incluye prendas por pedido: no se descontó stock de esas unidades.'
+    : 'El stock fue actualizado automáticamente.';
+  document.getElementById('receipt-modal').hidden = false;
+}
+document.getElementById('btn-close-receipt').addEventListener('click', () => {
+  document.getElementById('receipt-modal').hidden = true;
+});
+document.getElementById('btn-print-receipt').addEventListener('click', () => window.print());
+
+/* ============================================================
+   8) DASHBOARD FINANCIERO
+   ============================================================ */
+function getFilteredSales() {
+  const filter = document.getElementById('date-filter').value;
+  const now = new Date();
+  let start = null, end = null;
+
+  if (filter === 'hoy') { start = new Date(now.getFullYear(), now.getMonth(), now.getDate()); }
+  else if (filter === '7d') { start = new Date(now); start.setDate(start.getDate() - 7); }
+  else if (filter === 'mes') { start = new Date(now.getFullYear(), now.getMonth(), 1); }
+  else if (filter === 'custom') {
+    const s = document.getElementById('range-start').value;
+    const e = document.getElementById('range-end').value;
+    if (s) start = new Date(s + 'T00:00:00');
+    if (e) end = new Date(e + 'T23:59:59');
+  }
+
+  const search = document.getElementById('history-search').value.trim().toLowerCase();
+
+  return sales.filter((s) => {
+    if (start && s.fecha < start) return false;
+    if (end && s.fecha > end) return false;
+    if (search) {
+      const text = (s.items || []).map((it) => it.nombre + ' ' + it.talla).join(' ').toLowerCase();
+      if (!text.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function renderDashboard() {
+  const filtered = getFilteredSales();
+  const ingresos = filtered.reduce((a, s) => a + (s.total || 0), 0);
+  const ganancia = filtered.reduce((a, s) => a + (s.gananciaNeta ?? (s.total - (s.totalCosto || 0))), 0);
+  const prendas = filtered.reduce((a, s) => a + (s.cantidadPrendas || 0), 0);
+  const ticket = filtered.length ? ingresos / filtered.length : 0;
+
+  document.getElementById('kpi-ingresos').textContent = fmtMoney(ingresos);
+  document.getElementById('kpi-ganancia').textContent = fmtMoney(ganancia);
+  document.getElementById('kpi-prendas').textContent = prendas;
+  document.getElementById('kpi-ticket').textContent = fmtMoney(ticket);
+
+  const breakdown = {};
+  PAYMENT_METHODS.forEach((m) => breakdown[m] = 0);
+  filtered.forEach((s) => { breakdown[s.metodoPago] = (breakdown[s.metodoPago] || 0) + (s.total || 0); });
+
+  document.getElementById('payment-breakdown').innerHTML = PAYMENT_METHODS.map((m, i) => `
+    <div class="bg-black/40 rounded-xl p-3 anim-slide-up stagger-${(i % 5) + 1}">
+      <p class="text-[10px] text-zinc-500 uppercase tracking-wide truncate">${m}</p>
+      <p class="text-base font-semibold mt-1">${fmtMoney(breakdown[m])}</p>
+    </div>`).join('');
+
+  const tbody = document.getElementById('history-tbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-zinc-600 text-sm">No hay ventas en este periodo.</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map((s) => {
+      const detalle = (s.items || []).map((it) => `${it.nombre} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` +Diseño ${it.disenoTamano}cm` : ''}${it.porPedido ? ' [Pedido]' : ''}`).join(', ');
+      const tienePedido = s.tienePedido ?? (s.items || []).some((it) => it.porPedido);
+      return `
+        <tr class="border-b border-line/60">
+          <td class="px-6 py-3 whitespace-nowrap">${fmtDate(s.fecha)}</td>
+          <td class="px-6 py-3 whitespace-nowrap text-silver">${fmtTime(s.fecha)}</td>
+          <td class="px-6 py-3 max-w-xs">
+            <div class="flex items-center gap-1.5">
+              <span class="truncate" title="${escapeHtml(detalle)}">${escapeHtml(detalle)}</span>
+              ${tienePedido ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+            </div>
+          </td>
+          <td class="px-6 py-3 whitespace-nowrap text-silver">${escapeHtml(s.metodoPago)}</td>
+          <td class="px-6 py-3 text-right font-medium whitespace-nowrap">${fmtMoney(s.total)}</td>
+          <td class="px-6 py-3 text-center">
+            <button data-receipt="${s.id}" class="btn-ghost rounded-lg px-2.5 py-1 text-xs">Ver</button>
+          </td>
+        </tr>`;
+    }).join('');
+    tbody.querySelectorAll('[data-receipt]').forEach((btn) => btn.addEventListener('click', () => {
+      const sale = sales.find((s) => s.id === btn.dataset.receipt);
+      if (sale) showReceipt(sale);
+    }));
+  }
+}
+
+document.getElementById('date-filter').addEventListener('change', (e) => {
+  document.getElementById('custom-range').hidden = e.target.value !== 'custom';
+  renderDashboard();
+});
+document.getElementById('range-start').addEventListener('change', renderDashboard);
+document.getElementById('range-end').addEventListener('change', renderDashboard);
+document.getElementById('history-search').addEventListener('input', renderDashboard);
+
+/* ---------- Historial detallado (sección aparte) ---------- */
+function renderHistorial2() {
+  const filterVal = document.getElementById('hist2-date-filter').value;
+  const search = document.getElementById('hist2-search').value.trim().toLowerCase();
+  const now = new Date();
+  let start = null;
+  if (filterVal === 'hoy') start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  else if (filterVal === '7d') { start = new Date(now); start.setDate(start.getDate() - 7); }
+  else if (filterVal === 'mes') start = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const filtered = sales.filter((s) => {
+    if (start && s.fecha < start) return false;
+    if (search) {
+      const text = (s.items || []).map((it) => it.nombre).join(' ').toLowerCase();
+      if (!text.includes(search)) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('history2-tbody');
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-zinc-600 text-sm">No hay ventas en este periodo.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map((s) => {
+    const tienePedido = s.tienePedido ?? (s.items || []).some((it) => it.porPedido);
+    return `
+    <tr class="border-b border-line/60">
+      <td class="px-6 py-3 font-mono text-xs text-silver">
+        <div class="flex items-center gap-1.5">
+          <span>${s.id.slice(0, 8).toUpperCase()}</span>
+          ${tienePedido ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+        </div>
+      </td>
+      <td class="px-6 py-3 whitespace-nowrap">${fmtDate(s.fecha)} · ${fmtTime(s.fecha)}</td>
+      <td class="px-6 py-3">${s.cantidadPrendas || 0} uds.</td>
+      <td class="px-6 py-3 text-silver">${escapeHtml(s.metodoPago)}</td>
+      <td class="px-6 py-3 text-right font-medium">${fmtMoney(s.total)}</td>
+      <td class="px-6 py-3 text-center">
+        <button data-receipt2="${s.id}" class="btn-ghost rounded-lg px-2.5 py-1 text-xs">Recibo</button>
+      </td>
+    </tr>`;
+  }).join('');
+  tbody.querySelectorAll('[data-receipt2]').forEach((btn) => btn.addEventListener('click', () => {
+    const sale = sales.find((s) => s.id === btn.dataset.receipt2);
+    if (sale) showReceipt(sale);
+  }));
+}
+document.getElementById('hist2-search').addEventListener('input', renderHistorial2);
+document.getElementById('hist2-date-filter').addEventListener('change', renderHistorial2);
+
+/* ---------- Exportar CSV ---------- */
+document.getElementById('btn-export-csv').addEventListener('click', () => {
+  const filtered = getFilteredSales();
+  if (filtered.length === 0) { showToast('No hay ventas para exportar en este periodo.', 'error'); return; }
+
+  const rows = [['Fecha', 'Hora', 'Folio', 'Prenda', 'Categoría', 'Material', 'Talla', 'Cantidad', 'Precio Unitario', 'Diseño', 'Precio Diseño', 'Subtotal', 'Método de Pago', 'Total Venta', 'Tipo']];
+  filtered.forEach((s) => {
+    (s.items || []).forEach((it) => {
+      rows.push([
+        fmtDate(s.fecha), fmtTime(s.fecha), s.id.slice(0, 8).toUpperCase(),
+        it.nombre, it.categoria, it.material, it.talla, it.cantidad,
+        it.precioUnitario.toFixed(2), it.disenoTamano || '—', (Number(it.disenoPrecio) || 0).toFixed(2),
+        it.subtotal.toFixed(2), s.metodoPago, s.total.toFixed(2),
+        it.porPedido ? 'Por Pedido' : 'Inventario',
+      ]);
+    });
+  });
+
+  const csv = rows.map((r) => r.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `spotclub_ventas_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Reporte CSV descargado.');
+});
+
+/* ============================================================
+   8b) CUENTAS & CAJA — registro manual (Banco Bs / Binance USDT)
+   ------------------------------------------------------------
+   Esto no se conecta a ningún banco ni exchange real: es solo
+   una libreta de saldos, ingresos, gastos y conversiones que tú
+   registras a mano. Las conversiones Bs⇄USDT se hacen fuera de
+   la plataforma (banco/Binance) y aquí solo se anota el resultado.
+   ============================================================ */
+function fmtByCuenta(n, cuenta) {
+  const val = Number(n) || 0;
+  return cuenta === 'binance'
+    ? val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USDT'
+    : 'Bs ' + val.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderAccountBalances() {
+  const bsEl = document.getElementById('saldo-bs');
+  const usdtEl = document.getElementById('saldo-binance');
+  if (!bsEl || !usdtEl) return;
+  bsEl.textContent = fmtByCuenta(accounts.bs, 'bs');
+  bsEl.classList.toggle('text-red-400', (accounts.bs || 0) < 0);
+  usdtEl.textContent = fmtByCuenta(accounts.binance, 'binance');
+  usdtEl.classList.toggle('text-red-400', (accounts.binance || 0) < 0);
+}
+
+function tipoBadgeCls(tipo) {
+  if (tipo === 'ingreso') return 'border-emerald-800 text-emerald-400 bg-emerald-950/20';
+  if (tipo === 'gasto') return 'border-red-900 text-red-400 bg-red-950/20';
+  return 'border-line text-silver bg-white/5';
+}
+
+function renderMovimientos() {
+  const tbody = document.getElementById('mov-tbody');
+  if (!tbody) return;
+  const fCuenta = document.getElementById('mov-filter-cuenta').value;
+  const fTipo = document.getElementById('mov-filter-tipo').value;
+
+  const filtered = movimientos.filter((m) => {
+    if (fTipo && m.tipo !== fTipo) return false;
+    if (fCuenta) {
+      if (m.tipo === 'conversion') { if (m.cuentaOrigen !== fCuenta && m.cuentaDestino !== fCuenta) return false; }
+      else if (m.cuenta !== fCuenta) return false;
+    }
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-10 text-center text-zinc-600 text-sm">Sin movimientos registrados todavía.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((m) => {
+    let cuentaTxt, montoTxt, montoCls;
+    if (m.tipo === 'conversion') {
+      cuentaTxt = `${CUENTA_LABEL[m.cuentaOrigen] || m.cuentaOrigen} → ${CUENTA_LABEL[m.cuentaDestino] || m.cuentaDestino}`;
+      montoTxt = `${fmtByCuenta(m.montoOrigen, m.cuentaOrigen)} → ${fmtByCuenta(m.montoDestino, m.cuentaDestino)}`;
+      montoCls = 'text-white';
+    } else {
+      cuentaTxt = CUENTA_LABEL[m.cuenta] || '—';
+      montoTxt = (m.tipo === 'gasto' ? '−' : '+') + fmtByCuenta(m.monto, m.cuenta);
+      montoCls = m.tipo === 'gasto' ? 'text-red-400' : 'text-emerald-400';
+    }
+    return `
+      <tr class="border-b border-line/60">
+        <td class="px-6 py-3 whitespace-nowrap">${fmtDate(m.fecha)} <span class="text-silver">${fmtTime(m.fecha)}</span></td>
+        <td class="px-6 py-3"><span class="text-[10px] px-2 py-1 rounded-full border ${tipoBadgeCls(m.tipo)}">${TIPO_LABEL[m.tipo] || m.tipo}</span></td>
+        <td class="px-6 py-3 text-silver whitespace-nowrap">${escapeHtml(cuentaTxt)}</td>
+        <td class="px-6 py-3 text-right font-medium ${montoCls} whitespace-nowrap">${escapeHtml(montoTxt)}</td>
+        <td class="px-6 py-3 text-zinc-400 max-w-xs truncate" title="${escapeHtml(m.motivo || '')}">${escapeHtml(m.motivo || '—')}</td>
+      </tr>`;
+  }).join('');
+}
+
+document.getElementById('mov-filter-cuenta').addEventListener('change', renderMovimientos);
+document.getElementById('mov-filter-tipo').addEventListener('change', renderMovimientos);
+
+/* ---------- Transacción: escribe el saldo y el movimiento juntos ---------- */
+async function registrarMovimiento({ tipo, cuenta, monto, cuentaOrigen, cuentaDestino, montoOrigen, montoDestino, motivo }) {
+  const movRef = fb.doc(fb.collection(db, 'movimientos'));
+  await fb.runTransaction(db, async (transaction) => {
+    if (tipo === 'conversion') {
+      const origRef = fb.doc(db, 'accounts', cuentaOrigen);
+      const destRef = fb.doc(db, 'accounts', cuentaDestino);
+      const [origSnap, destSnap] = await Promise.all([transaction.get(origRef), transaction.get(destRef)]);
+      const origSaldo = origSnap.exists() ? (origSnap.data().saldo || 0) : 0;
+      const destSaldo = destSnap.exists() ? (destSnap.data().saldo || 0) : 0;
+      transaction.set(origRef, { saldo: origSaldo - montoOrigen, updatedAt: fb.serverTimestamp() }, { merge: true });
+      transaction.set(destRef, { saldo: destSaldo + montoDestino, updatedAt: fb.serverTimestamp() }, { merge: true });
+      transaction.set(movRef, { tipo, cuentaOrigen, cuentaDestino, montoOrigen, montoDestino, motivo: motivo || '', fecha: fb.serverTimestamp() });
+    } else {
+      const ref = fb.doc(db, 'accounts', cuenta);
+      const snap = await transaction.get(ref);
+      const saldo = snap.exists() ? (snap.data().saldo || 0) : 0;
+      const delta = tipo === 'gasto' ? -Math.abs(monto) : Math.abs(monto);
+      transaction.set(ref, { saldo: saldo + delta, updatedAt: fb.serverTimestamp() }, { merge: true });
+      transaction.set(movRef, { tipo, cuenta, monto: Math.abs(monto), motivo: motivo || '', fecha: fb.serverTimestamp() });
+    }
+  });
+}
+
+/* ---------- Modal: Ingreso / Gasto ---------- */
+document.querySelectorAll('[data-mov]').forEach((btn) => {
+  btn.addEventListener('click', () => openMovModal(btn.dataset.mov, btn.dataset.cuenta));
+});
+
+function openMovModal(tipo, cuenta) {
+  currentMovTipo = tipo;
+  currentMovCuenta = cuenta;
+  document.getElementById('mov-form').reset();
+  document.getElementById('mov-modal-title').textContent = tipo === 'gasto' ? 'REGISTRAR GASTO' : 'REGISTRAR INGRESO';
+  document.getElementById('mov-modal-subtitle').textContent = CUENTA_LABEL[cuenta];
+  document.getElementById('mov-motivo-label').textContent = tipo === 'gasto' ? 'Motivo (¿en qué se gastó?)' : 'Motivo (opcional)';
+  document.getElementById('mov-monto').placeholder = cuenta === 'binance' ? '0.00 USDT' : '0.00 Bs';
+  document.getElementById('mov-modal').hidden = false;
+}
+document.getElementById('close-mov-modal').addEventListener('click', () => { document.getElementById('mov-modal').hidden = true; });
+document.getElementById('cancel-mov').addEventListener('click', () => { document.getElementById('mov-modal').hidden = true; });
+document.getElementById('mov-modal').addEventListener('click', (e) => { if (e.target.id === 'mov-modal') e.currentTarget.hidden = true; });
+
+document.getElementById('mov-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!db) { showToast('Configura Firebase antes de registrar movimientos.', 'error'); return; }
+  const monto = parseMoneyInput(document.getElementById('mov-monto').value);
+  const motivo = document.getElementById('mov-motivo').value.trim();
+  if (monto <= 0) { showToast('Ingresa un monto válido.', 'error'); return; }
+  if (currentMovTipo === 'gasto' && !motivo) { showToast('Indica el motivo del gasto.', 'error'); return; }
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  try {
+    await registrarMovimiento({ tipo: currentMovTipo, cuenta: currentMovCuenta, monto, motivo });
+    showToast(currentMovTipo === 'gasto' ? 'Gasto registrado.' : 'Ingreso registrado.');
+    document.getElementById('mov-modal').hidden = true;
+  } catch (err) {
+    console.error(err);
+    showToast('Error al registrar el movimiento.', 'error');
+  }
+  submitBtn.disabled = false;
+});
+
+/* ---------- Modal: Conversión Bs ⇄ Binance ---------- */
+document.querySelectorAll('[data-conv]').forEach((btn) => {
+  btn.addEventListener('click', () => openConvModal(btn.dataset.conv));
+});
+
+function openConvModal(direccion) {
+  currentConvDireccion = direccion; // 'bs_to_usdt' | 'usdt_to_bs'
+  document.getElementById('conv-form').reset();
+  document.getElementById('conv-tasa-preview').textContent = '';
+  if (direccion === 'bs_to_usdt') {
+    document.getElementById('conv-modal-title').textContent = 'BS → BINANCE';
+    document.getElementById('conv-origen-label').textContent = 'Monto en Bs';
+    document.getElementById('conv-destino-label').textContent = 'USDT recibidos';
+  } else {
+    document.getElementById('conv-modal-title').textContent = 'BINANCE → BS';
+    document.getElementById('conv-origen-label').textContent = 'Monto en USDT';
+    document.getElementById('conv-destino-label').textContent = 'Bs recibidos';
+  }
+  document.getElementById('conv-modal').hidden = false;
+}
+document.getElementById('close-conv-modal').addEventListener('click', () => { document.getElementById('conv-modal').hidden = true; });
+document.getElementById('cancel-conv').addEventListener('click', () => { document.getElementById('conv-modal').hidden = true; });
+document.getElementById('conv-modal').addEventListener('click', (e) => { if (e.target.id === 'conv-modal') e.currentTarget.hidden = true; });
+
+function updateConvTasaPreview() {
+  const origen = parseMoneyInput(document.getElementById('conv-monto-origen').value);
+  const destino = parseMoneyInput(document.getElementById('conv-monto-destino').value);
+  const preview = document.getElementById('conv-tasa-preview');
+  if (origen > 0 && destino > 0) {
+    const tasa = currentConvDireccion === 'bs_to_usdt' ? origen / destino : destino / origen;
+    preview.textContent = `Tasa implícita: 1 USDT ≈ ${tasa.toLocaleString('es-VE', { maximumFractionDigits: 2 })} Bs`;
+  } else {
+    preview.textContent = '';
+  }
+}
+document.getElementById('conv-monto-origen').addEventListener('input', updateConvTasaPreview);
+document.getElementById('conv-monto-destino').addEventListener('input', updateConvTasaPreview);
+
+document.getElementById('conv-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!db) { showToast('Configura Firebase antes de registrar conversiones.', 'error'); return; }
+  const montoOrigen = parseMoneyInput(document.getElementById('conv-monto-origen').value);
+  const montoDestino = parseMoneyInput(document.getElementById('conv-monto-destino').value);
+  const motivo = document.getElementById('conv-motivo').value.trim();
+  if (montoOrigen <= 0 || montoDestino <= 0) { showToast('Ingresa ambos montos de la conversión.', 'error'); return; }
+
+  const cuentaOrigen = currentConvDireccion === 'bs_to_usdt' ? 'bs' : 'binance';
+  const cuentaDestino = currentConvDireccion === 'bs_to_usdt' ? 'binance' : 'bs';
+
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  try {
+    await registrarMovimiento({ tipo: 'conversion', cuentaOrigen, cuentaDestino, montoOrigen, montoDestino, motivo });
+    showToast('Conversión registrada.');
+    document.getElementById('conv-modal').hidden = true;
+  } catch (err) {
+    console.error(err);
+    showToast('Error al registrar la conversión.', 'error');
+  }
+  submitBtn.disabled = false;
+});
+
+/* ============================================================
+   9) FONDO WEBGL — SHADER MONOCROMO REACTIVO (Three.js)
+   ============================================================ */
+function initShaderBackground() {
+  const canvas = document.getElementById('bg-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
+  const uniforms = {
+    uTime: { value: 0 },
+    uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+    uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+    uMouseInfluence: { value: 0 },
+  };
+
+  const vertexShader = `
+    void main() { gl_Position = vec4(position, 1.0); }
+  `;
+
+  const fragmentShader = `
+    precision highp float;
+    uniform float uTime;
+    uniform vec2 uResolution;
+    uniform vec2 uMouse;
+    uniform float uMouseInfluence;
+
+    // Ashima simplex noise 2D (MIT license)
+    vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+    vec2 mod289(vec2 x){return x-floor(x*(1.0/289.0))*289.0;}
+    vec3 permute(vec3 x){return mod289(((x*34.0)+1.0)*x);}
+    float snoise(vec2 v){
+      const vec4 C = vec4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+      vec2 i  = floor(v + dot(v, C.yy));
+      vec2 x0 = v -   i + dot(i, C.xx);
+      vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+      vec4 x12 = x0.xyxy + C.xxzz;
+      x12.xy -= i1;
+      i = mod289(i);
+      vec3 p = permute( permute( i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+      vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+      m = m*m; m = m*m;
+      vec3 x = 2.0 * fract(p * C.www) - 1.0;
+      vec3 h = abs(x) - 0.5;
+      vec3 ox = floor(x + 0.5);
+      vec3 a0 = x - ox;
+      m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+      vec3 g;
+      g.x  = a0.x  * x0.x  + h.x  * x0.y;
+      g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+      return 130.0 * dot(m, g);
+    }
+
+    float fbm(vec2 p) {
+      float value = 0.0;
+      float amplitude = 0.55;
+      for (int i = 0; i < 5; i++) {
+        value += amplitude * snoise(p);
+        p *= 2.02;
+        amplitude *= 0.55;
+      }
+      return value;
+    }
+
+    void main() {
+      vec2 uv = gl_FragCoord.xy / uResolution.xy;
+      vec2 p = uv * 3.0;
+      p.x *= uResolution.x / uResolution.y;
+
+      float t = uTime * 0.045;
+      vec2 flow = vec2(fbm(p + t), fbm(p - t + 4.2));
+      float n = fbm(p + flow * 1.2 + t);
+
+      vec2 mouseUv = uMouse;
+      mouseUv.x *= uResolution.x / uResolution.y;
+      float distToMouse = distance(p, mouseUv * 3.0);
+      float ripple = smoothstep(1.4, 0.0, distToMouse) * uMouseInfluence;
+      n += ripple * 0.8;
+
+      float shade = smoothstep(-0.6, 0.9, n);
+      shade = pow(shade, 1.6);
+
+      vec3 col = mix(vec3(0.0), vec3(0.11), shade);
+      col = mix(col, vec3(0.55), smoothstep(0.82, 1.0, shade) * 0.5);
+
+      float vignette = smoothstep(1.15, 0.25, length(uv - 0.5));
+      col *= mix(0.55, 1.0, vignette);
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  const material = new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader });
+  const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+  scene.add(quad);
+
+  let targetMouse = new THREE.Vector2(0.5, 0.5);
+  window.addEventListener('mousemove', (e) => {
+    targetMouse.x = e.clientX / window.innerWidth;
+    targetMouse.y = 1.0 - e.clientY / window.innerHeight;
+    uniforms.uMouseInfluence.value = 1.0;
+  });
+  window.addEventListener('mouseleave', () => { uniforms.uMouseInfluence.value = 0; });
+  window.addEventListener('touchmove', (e) => {
+    if (e.touches[0]) {
+      targetMouse.x = e.touches[0].clientX / window.innerWidth;
+      targetMouse.y = 1.0 - e.touches[0].clientY / window.innerHeight;
+      uniforms.uMouseInfluence.value = 1.0;
+    }
+  }, { passive: true });
+
+  window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    uniforms.uResolution.value.set(window.innerWidth, window.innerHeight);
+  });
+
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    uniforms.uTime.value = clock.getElapsedTime();
+    uniforms.uMouse.value.lerp(targetMouse, 0.045);
+    uniforms.uMouseInfluence.value *= 0.98;
+    renderer.render(scene, camera);
+  }
+  animate();
+}
+
+/* ============================================================
+   10) INICIALIZACIÓN
+   ============================================================ */
+try {
+  initShaderBackground();
+} catch (err) {
+  console.warn('WebGL no disponible, se omite el fondo animado.', err);
+  document.getElementById('bg-canvas').style.background = '#000';
+}
+
+renderCart();
+renderDashboard();
+renderAccountBalances();
+renderMovimientos();
+renderDesignPricesForm();
+refreshPosDisenoOptions();
+initFirebase();
+</script>
+</body>
+</html>
