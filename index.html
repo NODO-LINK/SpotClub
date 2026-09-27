@@ -2,7 +2,7 @@
 <html lang="es" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>Spot Club — Panel Administrativo</title>
 
 <!-- ==================== TAILWIND CSS (CDN) ==================== -->
@@ -42,15 +42,22 @@
 <!-- ==================== THREE.JS (CDN) — fondo shader ==================== -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
+<!-- ==================== HTML2CANVAS (CDN) — descarga de recibo en PNG ==================== -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
   html, body { background: #000000; }
+  html { touch-action: manipulation; -ms-touch-action: manipulation; }
   body {
     font-family: 'Space Grotesk', sans-serif;
     -webkit-font-smoothing: antialiased;
     overflow-x: hidden;
+    touch-action: manipulation;
   }
+  /* Evita el zoom automático de iOS al enfocar inputs, y bloquea el doble-tap-para-zoom en todos lados. */
+  input, select, textarea { font-size: 16px; touch-action: manipulation; }
   .font-display { font-family: 'Anton', sans-serif; letter-spacing: 0.02em; }
 
   /* ---------- Shader background canvas ---------- */
@@ -357,6 +364,44 @@
         </div>
       </div>
 
+      <!-- Alerta de Stock Bajo -->
+      <div id="low-stock-alert" hidden class="glass rounded-2xl p-5 border border-amber-800/60 bg-amber-950/10 anim-slide-up">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.14A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+            <h3 id="low-stock-alert-title" class="font-semibold tracking-wide text-amber-400 text-sm"></h3>
+          </div>
+          <button id="btn-copiar-reposicion" type="button" class="text-[11px] px-2.5 py-1 rounded-lg border border-amber-800/60 text-amber-300 hover:bg-amber-950/40 transition-colors">Copiar lista de compra</button>
+        </div>
+        <div id="low-stock-alert-list" class="flex flex-wrap gap-2 mt-3"></div>
+      </div>
+
+      <!-- Costos / Reinversión -->
+      <div class="glass rounded-2xl p-6 anim-slide-up">
+        <div class="mb-4">
+          <h3 class="font-semibold tracking-wide">Costos &amp; Reinversión</h3>
+          <p class="text-xs text-silver mt-0.5">Cuánto reponer para reinvertir en mercancía, presentación e impresión de diseños, según el periodo filtrado.</p>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div class="bg-black/40 rounded-xl p-3">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Costo de Mercancía</p>
+            <p id="kpi-costo-mercancia" class="text-lg font-semibold mt-1">$0.00</p>
+          </div>
+          <div class="bg-black/40 rounded-xl p-3">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Costo de Presentación</p>
+            <p id="kpi-costo-presentacion" class="text-lg font-semibold mt-1">$0.00</p>
+          </div>
+          <div class="bg-black/40 rounded-xl p-3">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Costo Impresión Diseños</p>
+            <p id="kpi-costo-disenos" class="text-lg font-semibold mt-1">$0.00</p>
+          </div>
+          <div class="bg-black/40 rounded-xl p-3 border border-line">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Total a Reponer</p>
+            <p id="kpi-total-reponer" class="text-lg font-semibold mt-1 text-white">$0.00</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Desglose por método de pago + filtros -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <div class="lg:col-span-2 glass rounded-2xl p-6 anim-slide-up">
@@ -423,7 +468,7 @@
         </div>
         <button id="btn-new-product" class="btn-primary rounded-lg px-5 py-3 text-sm flex items-center gap-2">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg>
-          Nueva Prenda
+          Nuevo Producto
         </button>
       </header>
 
@@ -431,24 +476,28 @@
       <div class="glass rounded-2xl p-5 anim-slide-up">
         <div class="mb-4">
           <h3 class="font-semibold tracking-wide">Precios de Diseño / Estampado</h3>
-          <p class="text-xs text-silver mt-0.5">Tamaños fijos de estampado, con precio ajustable. Aplica a las prendas que marques con "Lleva diseño" (franela algodón, franela microdurazno, hoodies, etc).</p>
+          <p class="text-xs text-silver mt-0.5">Tamaños fijos de estampado. "Precio" es lo que se cobra al cliente; "Costo" es lo que te cuesta imprimirlo (se usa para calcular cuánto reponer/reinvertir). Aplica a las prendas que marques con "Lleva diseño".</p>
         </div>
         <form id="design-prices-form" class="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
-          <div>
-            <label class="text-xs uppercase tracking-wider text-silver">10x10 cm</label>
-            <input type="text" inputmode="decimal" id="precio-10x10" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <div class="bg-black/30 rounded-lg p-2.5 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-silver">10x10 cm</p>
+            <div><label class="text-[10px] text-zinc-500">Precio</label><input type="text" inputmode="decimal" id="precio-10x10" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
+            <div><label class="text-[10px] text-zinc-500">Costo</label><input type="text" inputmode="decimal" id="costo-10x10" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
           </div>
-          <div>
-            <label class="text-xs uppercase tracking-wider text-silver">22x28 cm</label>
-            <input type="text" inputmode="decimal" id="precio-22x28" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <div class="bg-black/30 rounded-lg p-2.5 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-silver">22x28 cm</p>
+            <div><label class="text-[10px] text-zinc-500">Precio</label><input type="text" inputmode="decimal" id="precio-22x28" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
+            <div><label class="text-[10px] text-zinc-500">Costo</label><input type="text" inputmode="decimal" id="costo-22x28" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
           </div>
-          <div>
-            <label class="text-xs uppercase tracking-wider text-silver">28x36 cm</label>
-            <input type="text" inputmode="decimal" id="precio-28x36" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <div class="bg-black/30 rounded-lg p-2.5 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-silver">28x36 cm</p>
+            <div><label class="text-[10px] text-zinc-500">Precio</label><input type="text" inputmode="decimal" id="precio-28x36" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
+            <div><label class="text-[10px] text-zinc-500">Costo</label><input type="text" inputmode="decimal" id="costo-28x36" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
           </div>
-          <div>
-            <label class="text-xs uppercase tracking-wider text-silver">40x40 cm</label>
-            <input type="text" inputmode="decimal" id="precio-40x40" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <div class="bg-black/30 rounded-lg p-2.5 space-y-2">
+            <p class="text-xs uppercase tracking-wider text-silver">40x40 cm</p>
+            <div><label class="text-[10px] text-zinc-500">Precio</label><input type="text" inputmode="decimal" id="precio-40x40" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
+            <div><label class="text-[10px] text-zinc-500">Costo</label><input type="text" inputmode="decimal" id="costo-40x40" placeholder="0.00" class="input-dark w-full rounded-lg px-2.5 py-2 text-sm mt-0.5" /></div>
           </div>
           <div class="col-span-2 sm:col-span-4 flex justify-end">
             <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Guardar precios de diseño</button>
@@ -471,9 +520,26 @@
         </form>
       </div>
 
+      <!-- Categorías con Talla -->
+      <div class="glass rounded-2xl p-5 anim-slide-up">
+        <div class="mb-4">
+          <h3 class="font-semibold tracking-wide">Categorías con Talla</h3>
+          <p class="text-xs text-silver mt-0.5">Cuando la categoría de un producto nuevo coincida con una de esta lista (ej. Hoodie, Chaqueta, Mono, Franela), el formulario mostrará automáticamente la matriz de tallas y la opción de diseño/estampado. Cualquier otra categoría (lentes, accesorios, etc.) se guarda como stock único, sin llenar el formulario de campos que no aplican.</p>
+        </div>
+        <form id="categorias-talla-form" class="flex flex-col gap-3">
+          <div>
+            <label class="text-xs uppercase tracking-wider text-silver">Categorías (separadas por coma)</label>
+            <input type="text" id="categorias-talla-input" placeholder="Franela, Hoodie, Pantalón, Gorra, Short, Chaqueta, Camisa, Mono" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          </div>
+          <div class="flex justify-end">
+            <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Guardar categorías</button>
+          </div>
+        </form>
+      </div>
+
       <!-- Filtros -->
       <div class="glass rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-4 gap-3 anim-slide-up">
-        <input id="filter-search" type="text" placeholder="Buscar prenda…" class="input-dark rounded-lg px-3 py-2.5 text-sm sm:col-span-2" />
+        <input id="filter-search" type="text" placeholder="Buscar producto…" class="input-dark rounded-lg px-3 py-2.5 text-sm sm:col-span-2" />
         <select id="filter-categoria" class="input-dark rounded-lg px-3 py-2.5 text-sm">
           <option value="">Todas las categorías</option>
         </select>
@@ -488,7 +554,7 @@
 
       <!-- Grid de productos -->
       <div id="product-grid" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-      <p id="product-empty" class="text-center text-zinc-600 text-sm py-16" hidden>No se encontraron prendas con estos filtros.</p>
+      <p id="product-empty" class="text-center text-zinc-600 text-sm py-16" hidden>No se encontraron productos con estos filtros.</p>
     </section>
 
     <!-- ---------- POS ---------- -->
@@ -572,10 +638,8 @@
           </div>
 
           <div id="pos-diseno-wrap" hidden class="space-y-1.5 bg-black/30 rounded-lg p-3 border border-line">
-            <label class="text-xs uppercase tracking-wider text-silver">Diseño / Estampado (opcional)</label>
-            <select id="pos-diseno" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm">
-              <option value="">Sin diseño</option>
-            </select>
+            <label class="text-xs uppercase tracking-wider text-silver">Diseño / Estampado (opcional, puedes marcar varios)</label>
+            <div id="pos-diseno-checks" class="grid grid-cols-2 gap-1.5 mt-1"></div>
             <p id="pos-diseno-extra-info" class="text-xs text-emerald-400" hidden></p>
           </div>
 
@@ -598,6 +662,10 @@
               <input id="pos-cliente-cedula" type="text" placeholder="V-12345678" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
             </div>
             <div>
+              <label class="text-[10px] uppercase tracking-wider text-silver">Teléfono</label>
+              <input id="pos-cliente-telefono" type="text" placeholder="0414-1234567" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
+            </div>
+            <div>
               <label class="text-[10px] uppercase tracking-wider text-silver">Estado</label>
               <input id="pos-cliente-estado" type="text" placeholder="Ej. Zulia" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
             </div>
@@ -605,7 +673,7 @@
               <label class="text-[10px] uppercase tracking-wider text-silver">País</label>
               <input id="pos-cliente-pais" type="text" placeholder="Ej. Venezuela" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
             </div>
-            <div>
+            <div class="col-span-2">
               <label class="text-[10px] uppercase tracking-wider text-silver">Cód. Agencia de Envío</label>
               <input id="pos-cliente-agencia" type="text" placeholder="Ej. MRW-0451" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
             </div>
@@ -639,6 +707,18 @@
               </select>
             </div>
 
+            <div class="bg-black/30 rounded-lg p-3 border border-line space-y-2.5">
+              <label class="flex items-center gap-2 text-sm text-silver cursor-pointer select-none">
+                <input type="checkbox" id="pos-pago-completo" class="accent-white w-4 h-4" checked />
+                Pago completo (recibido el 100% del total)
+              </label>
+              <div id="pos-monto-abonado-wrap" hidden>
+                <label class="text-xs uppercase tracking-wider text-silver">Monto abonado ($)</label>
+                <input type="text" inputmode="decimal" id="pos-monto-abonado" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+                <p class="text-xs mt-1.5"><span id="pos-estado-pago-badge"></span> <span id="pos-saldo-pendiente" class="text-silver"></span></p>
+              </div>
+            </div>
+
             <button id="btn-complete-sale" disabled class="btn-primary w-full rounded-lg px-4 py-3.5 text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed">
               Completar Venta
             </button>
@@ -649,9 +729,16 @@
 
     <!-- ---------- HISTORIAL / FACTURACIÓN (detalle) ---------- -->
     <section id="section-historial" class="p-5 md:p-10 space-y-6" hidden>
-      <header class="anim-slide-up">
-        <h2 class="font-display text-3xl md:text-4xl tracking-wide">HISTORIAL &amp; FACTURACIÓN</h2>
-        <p class="text-silver text-sm mt-1">Consulta y reimprime cualquier recibo emitido por Spot Club.</p>
+      <header class="anim-slide-up flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h2 class="font-display text-3xl md:text-4xl tracking-wide">HISTORIAL &amp; FACTURACIÓN</h2>
+          <p class="text-silver text-sm mt-1">Consulta y reimprime cualquier recibo emitido por Spot Club.</p>
+        </div>
+        <button id="btn-ver-pedidos-pendientes" class="btn-ghost rounded-lg px-4 py-2.5 text-sm flex items-center gap-2 relative">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>
+          Resumen de Pedidos Pendientes
+          <span id="pedidos-pendientes-count" hidden class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-950/60 text-amber-400 border border-amber-800">0</span>
+        </button>
       </header>
 
       <div class="glass rounded-2xl p-4 flex flex-wrap gap-3 items-center anim-slide-up">
@@ -693,7 +780,7 @@
         <p class="text-silver text-sm mt-1">Registro manual de tus saldos en Banco (Bs) y Binance (USDT). No se conecta a ningún banco: es solo para llevar la cuenta de lo guardado, lo gastado y por qué.</p>
       </header>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <!-- Banco Bs -->
         <div class="glass rounded-2xl p-6 anim-slide-up">
           <div class="flex items-center justify-between gap-3">
@@ -749,6 +836,62 @@
         </div>
       </div>
 
+      <!-- Reserva Recomendada en USDT -->
+      <div class="glass rounded-2xl p-6 anim-slide-up">
+        <div class="flex items-center justify-between flex-wrap gap-3 mb-1">
+          <div>
+            <h3 class="font-semibold tracking-wide">Reserva Recomendada en USDT</h3>
+            <p class="text-xs text-silver mt-0.5">Cuánto dinero deberías tener apartado en Binance para reponer mercancía, cubrir presentación y alimentar tu fondo de inversión.</p>
+          </div>
+          <select id="reserva-usdt-periodo" class="input-dark rounded-lg px-3 py-2 text-xs">
+            <option value="hoy">Hoy</option>
+            <option value="7d">Últimos 7 días</option>
+            <option value="mes">Este mes</option>
+            <option value="todo" selected>Todo (histórico)</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+          <div class="bg-black/40 rounded-xl p-3">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Capital de Producto (franelas, etc.) a Reponer</p>
+            <p id="reserva-capital-producto" class="text-lg font-semibold mt-1">$0.00</p>
+          </div>
+          <div class="bg-black/40 rounded-xl p-3">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Gastos de Presentación</p>
+            <p id="reserva-presentacion" class="text-lg font-semibold mt-1">$0.00</p>
+          </div>
+          <div class="bg-black/40 rounded-xl p-3">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Costo Impresión Diseños</p>
+            <p id="reserva-disenos" class="text-lg font-semibold mt-1">$0.00</p>
+          </div>
+          <div class="bg-black/40 rounded-xl p-3 border border-line">
+            <p class="text-[10px] text-zinc-500 uppercase tracking-wide">Fondo de Inversión</p>
+            <p id="reserva-fondo-inversion" class="text-lg font-semibold mt-1">$0.00</p>
+          </div>
+        </div>
+
+        <div class="border-t border-line mt-4 pt-4 flex flex-wrap items-baseline justify-between gap-2">
+          <span class="text-sm text-silver">Total recomendado a tener guardado en USDT</span>
+          <span id="reserva-total" class="font-display text-2xl">$0.00</span>
+        </div>
+        <div class="flex flex-wrap items-baseline justify-between gap-2 mt-1.5">
+          <span class="text-xs text-zinc-500">Saldo actual en Binance (USDT)</span>
+          <span id="reserva-saldo-actual" class="text-sm text-silver">0.00 USDT</span>
+        </div>
+        <div class="flex flex-wrap items-baseline justify-between gap-2 mt-1.5">
+          <span class="text-xs text-zinc-500">Diferencia</span>
+          <span id="reserva-diferencia" class="text-sm font-medium">$0.00</span>
+        </div>
+
+        <form id="fondo-inversion-form" class="flex flex-wrap items-end gap-3 mt-5 pt-4 border-t border-line">
+          <div>
+            <label class="text-xs uppercase tracking-wider text-silver">Fondo de Inversión ($, monto manual)</label>
+            <input type="text" inputmode="decimal" id="input-fondo-inversion" placeholder="0.00" class="input-dark w-40 rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          </div>
+          <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Guardar fondo de inversión</button>
+        </form>
+      </div>
+
       <!-- Historial de movimientos -->
       <div class="glass rounded-2xl overflow-hidden anim-slide-up">
         <div class="p-6 pb-4 flex items-center justify-between flex-wrap gap-3">
@@ -795,7 +938,7 @@
   <div class="glass-strong rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto anim-scale-in">
     <form id="product-form" class="p-6 md:p-8 space-y-5">
       <div class="flex items-center justify-between">
-        <h3 id="product-modal-title" class="font-display text-2xl tracking-wide">NUEVA PRENDA</h3>
+        <h3 id="product-modal-title" class="font-display text-2xl tracking-wide">NUEVO PRODUCTO</h3>
         <button type="button" id="close-product-modal" class="btn-ghost rounded-lg p-2">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
@@ -805,22 +948,15 @@
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="sm:col-span-2">
-          <label class="text-xs uppercase tracking-wider text-silver">Nombre de la prenda</label>
+          <label class="text-xs uppercase tracking-wider text-silver">Nombre del producto</label>
           <input required id="product-nombre" type="text" placeholder="Ej. Hoodie Spot Club Classic" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
         </div>
 
         <div>
-          <label class="text-xs uppercase tracking-wider text-silver">Categoría / Tipo de prenda</label>
-          <input required id="product-categoria" list="categoria-options" type="text" placeholder="Ej. Hoodie" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
-          <datalist id="categoria-options">
-            <option value="Franela"></option>
-            <option value="Hoodie"></option>
-            <option value="Pantalón"></option>
-            <option value="Gorra"></option>
-            <option value="Short"></option>
-            <option value="Chaqueta"></option>
-            <option value="Camisa"></option>
-          </datalist>
+          <label class="text-xs uppercase tracking-wider text-silver">Categoría / Tipo de producto</label>
+          <input required id="product-categoria" list="categoria-options" type="text" placeholder="Ej. Hoodie, Lentes, Gorra…" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <datalist id="categoria-options"></datalist>
+          <p class="text-[11px] text-zinc-500 mt-1">Si la categoría está en tu lista de "Categorías con Talla" (más abajo en Inventario), este formulario mostrará tallas y diseño automáticamente. Si no, se guarda como stock único, sin tallas.</p>
         </div>
 
         <div>
@@ -844,21 +980,46 @@
           <label class="text-xs uppercase tracking-wider text-silver">Precio de Venta ($)</label>
           <input required id="product-precio" type="text" inputmode="decimal" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
         </div>
+        <div id="product-deficit-wrap">
+          <label class="text-xs uppercase tracking-wider text-silver">Déficit de Stock (alerta)</label>
+          <input type="number" min="0" id="product-deficit" placeholder="5" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <p id="product-deficit-help" class="text-[11px] text-zinc-500 mt-1">Cuando el stock único llegue a este número o menos, se marca como "Stock bajo".</p>
+        </div>
+        <div id="product-objetivo-wrap">
+          <label class="text-xs uppercase tracking-wider text-silver">Stock Objetivo (reposición)</label>
+          <input type="number" min="0" id="product-objetivo" placeholder="10" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <p id="product-objetivo-help" class="text-[11px] text-zinc-500 mt-1">Nivel ideal que quieres mantener de este producto. La alerta de stock bajo te dirá cuántas unidades comprar para llegar a este número.</p>
+        </div>
+        <div>
+          <label class="text-xs uppercase tracking-wider text-silver">Costo de Presentación ($)</label>
+          <input required id="product-presentacion" type="text" inputmode="decimal" placeholder="0.22" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+          <p class="text-[11px] text-zinc-500 mt-1">Bolsas, etiquetas, etc. de este producto en particular. Por defecto trae el cargo general, pero puedes ajustarlo por producto.</p>
+        </div>
       </div>
 
-      <div>
-        <label class="text-xs uppercase tracking-wider text-silver mb-2 block">Matriz de Tallas y Stock</label>
-        <div id="size-matrix" class="grid grid-cols-4 sm:grid-cols-8 gap-2"></div>
+      <div id="size-matrix-wrap" hidden>
+        <label class="text-xs uppercase tracking-wider text-silver mb-2 block">Tallas Disponibles</label>
+        <div id="size-matrix-chips" class="grid grid-cols-4 sm:grid-cols-8 gap-2"></div>
+        <div id="size-matrix-rows" class="mt-3 space-y-2"></div>
+        <p class="text-[11px] text-zinc-500 mt-2">Si dejas "Déficit" u "Objetivo" en blanco para una talla, se usa el valor general de arriba.</p>
       </div>
 
-      <label class="flex items-start gap-2.5 text-sm text-silver cursor-pointer select-none bg-black/30 rounded-lg px-3 py-3 border border-line">
-        <input type="checkbox" id="product-aplica-diseno" class="accent-white w-4 h-4 mt-0.5" />
-        <span>Esta prenda lleva diseño / estampado <span class="block text-xs text-zinc-500 mt-0.5">Ej. franela algodón, franela microdurazno, hoodies. En el Punto de Venta podrás elegir el tamaño del estampado (10x10, 22x28, 28x36, 40x40 cm) y su precio se suma a cada unidad.</span></span>
-      </label>
+      <div id="stock-unico-wrap">
+        <label class="text-xs uppercase tracking-wider text-silver">Stock disponible</label>
+        <input type="number" min="0" id="product-stock-unico" placeholder="0" class="input-dark w-full sm:w-48 rounded-lg px-3 py-2.5 text-sm mt-1.5" />
+        <p class="text-xs text-zinc-500 mt-1">Para productos sin desglose por talla (ej. lentes, accesorios, unitalla).</p>
+      </div>
+
+      <div id="product-diseno-wrap" hidden>
+        <label class="flex items-start gap-2.5 text-sm text-silver cursor-pointer select-none bg-black/30 rounded-lg px-3 py-3 border border-line">
+          <input type="checkbox" id="product-aplica-diseno" class="accent-white w-4 h-4 mt-0.5" />
+          <span>Este producto lleva diseño / estampado <span class="block text-xs text-zinc-500 mt-0.5">Ej. franela algodón, franela microdurazno, hoodies. En el Punto de Venta podrás elegir el tamaño del estampado (10x10, 22x28, 28x36, 40x40 cm) y su precio se suma a cada unidad.</span></span>
+        </label>
+      </div>
 
       <div class="flex justify-end gap-3 pt-2">
         <button type="button" id="cancel-product" class="btn-ghost rounded-lg px-5 py-2.5 text-sm">Cancelar</button>
-        <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Guardar Prenda</button>
+        <button type="submit" class="btn-primary rounded-lg px-6 py-2.5 text-sm">Guardar Producto</button>
       </div>
     </form>
   </div>
@@ -877,7 +1038,7 @@
 
     <div id="receipt-print-area" class="p-6 space-y-4 text-sm">
       <div class="text-center">
-        <img id="receipt-logo" src="" alt="Spot Club" class="mx-auto mb-2 max-h-14" hidden />
+        <img id="receipt-logo" src="data:image/png;base64,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" alt="Spot Club" class="mx-auto mb-2 max-h-16" />
         <h4 id="receipt-logo-text" class="font-display text-2xl tracking-widest">SPOT CLUB</h4>
         <p class="text-[11px] text-silver mt-1">Comprobante de Venta Interno</p>
       </div>
@@ -899,16 +1060,28 @@
         <span>Método de pago</span>
         <span id="receipt-metodo" class="text-white">—</span>
       </div>
+      <div class="flex justify-between items-center text-xs">
+        <span class="text-silver">Estado de pago</span>
+        <span id="receipt-estado-pago"></span>
+      </div>
+      <div id="receipt-saldo-wrap" hidden class="flex justify-between text-xs text-silver">
+        <span>Saldo pendiente</span>
+        <span id="receipt-saldo" class="text-white">$0.00</span>
+      </div>
       <p class="text-center text-[13px] font-display tracking-widest pt-4">YOU LOOK LIKE SUCCESS</p>
       <p class="text-center text-[10px] text-zinc-600">Gracias por su compra — Spot Club</p>
     </div>
 
-    <div class="p-6 pt-2 flex gap-3">
-      <button id="btn-print-receipt" class="btn-ghost flex-1 rounded-lg px-4 py-3 text-sm flex items-center justify-center gap-2">
+    <div class="p-6 pt-2 flex flex-wrap gap-3">
+      <button id="btn-print-receipt" class="btn-ghost flex-1 rounded-lg px-4 py-3 text-sm flex items-center justify-center gap-2 min-w-[120px]">
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
         Imprimir
       </button>
-      <button id="btn-close-receipt" class="btn-primary flex-1 rounded-lg px-4 py-3 text-sm">Cerrar</button>
+      <button id="btn-download-receipt" class="btn-ghost flex-1 rounded-lg px-4 py-3 text-sm flex items-center justify-center gap-2 min-w-[120px]">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0-4-4m4 4 4-4"/><path d="M4 21h16"/></svg>
+        Descargar PNG
+      </button>
+      <button id="btn-close-receipt" class="btn-primary flex-1 rounded-lg px-4 py-3 text-sm min-w-[120px]">Cerrar</button>
     </div>
   </div>
 </div>
@@ -953,6 +1126,10 @@
           <input id="edit-sale-cliente-cedula" type="text" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
         </div>
         <div>
+          <label class="text-[10px] uppercase tracking-wider text-silver">Teléfono</label>
+          <input id="edit-sale-cliente-telefono" type="text" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
+        </div>
+        <div>
           <label class="text-[10px] uppercase tracking-wider text-silver">Estado</label>
           <input id="edit-sale-cliente-estado" type="text" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm mt-1" />
         </div>
@@ -982,11 +1159,52 @@
         <span id="edit-sale-total" class="font-display text-xl">$0.00</span>
       </div>
 
+      <div class="bg-black/30 rounded-lg p-3 border border-line space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <label class="text-xs uppercase tracking-wider text-silver">Monto abonado ($)</label>
+          <span id="edit-sale-estado-pago-badge"></span>
+        </div>
+        <input type="text" inputmode="decimal" id="edit-sale-monto-abonado" placeholder="0.00" class="input-dark w-full rounded-lg px-3 py-2.5 text-sm" />
+        <p id="edit-sale-saldo" class="text-xs text-silver"></p>
+        <div class="flex gap-2">
+          <button type="button" id="edit-sale-marcar-pagado" class="btn-ghost flex-1 rounded-lg px-3 py-2 text-xs">Marcar Pago Completo</button>
+          <button type="button" id="edit-sale-marcar-no-pagado" class="btn-ghost flex-1 rounded-lg px-3 py-2 text-xs">Marcar No Pagado</button>
+        </div>
+      </div>
+
       <div class="flex gap-3 pt-2">
         <button type="button" id="cancel-edit-sale" class="btn-ghost flex-1 rounded-lg px-4 py-2.5 text-sm">Cancelar</button>
         <button type="submit" class="btn-primary flex-1 rounded-lg px-4 py-2.5 text-sm">Guardar Cambios</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ==================== MODAL: RESUMEN DE PEDIDOS PENDIENTES ==================== -->
+<div id="pedidos-pendientes-modal" hidden class="fixed inset-0 z-[80] flex items-center justify-center p-4 modal-backdrop">
+  <div class="glass-strong rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto anim-scale-in">
+    <div class="p-6 pb-4 flex items-center justify-between sticky top-0 glass-strong z-10">
+      <div>
+        <h3 class="font-display text-2xl tracking-wide">PEDIDOS PENDIENTES</h3>
+        <p class="text-silver text-xs mt-1">Prendas vendidas "por pedido" que aún debes comprar/surtir con el proveedor.</p>
+      </div>
+      <button type="button" id="close-pedidos-pendientes-modal" class="btn-ghost rounded-lg p-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="px-6 pb-6 space-y-5">
+      <div>
+        <h4 class="text-xs uppercase tracking-wider text-silver mb-2">Qué comprar (totales)</h4>
+        <div id="pedidos-resumen-totales" class="flex flex-wrap gap-2"></div>
+      </div>
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="text-xs uppercase tracking-wider text-silver">Detalle por venta</h4>
+          <button type="button" id="btn-copiar-pedidos" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">Copiar resumen</button>
+        </div>
+        <div id="pedidos-detalle-list" class="space-y-2"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1106,10 +1324,11 @@ async function initFirebase() {
     setConnState('online', 'Firestore conectado');
     listenProducts();
     listenSales();
-    listenAccounts();
     listenMovimientos();
     listenDesignPrices();
     listenFacturacionSettings();
+    listenCategoriasConTalla();
+    listenReservaUsdt();
     return true;
   } catch (err) {
     console.error('Error inicializando Firebase:', err);
@@ -1135,6 +1354,7 @@ function setConnState(state, label) {
 const SIZES = ['16', 'XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'];
 const PAYMENT_METHODS = ['Efectivo (USD/Bs)', 'Transferencia', 'Pago Móvil', 'Zelle', 'Punto de Venta'];
 const LOW_STOCK_THRESHOLD = 5;
+const DEFAULT_STOCK_OBJETIVO = 10;
 const DESIGN_SIZES = ['10x10', '22x28', '28x36', '40x40'];
 
 let products = [];
@@ -1146,7 +1366,10 @@ let selectedSizesInForm = new Set();
 let posMode = 'inventario'; // 'inventario' | 'pedido'
 let posCustomItem = false; // producto fuera del catálogo (solo en modo pedido)
 let designPrices = { '10x10': 0, '22x28': 0, '28x36': 0, '40x40': 0 };
+let designCosts = { '10x10': 0, '22x28': 0, '28x36': 0, '40x40': 0 }; // costo real de impresión (para reinversión)
 let presentacionCargo = 0.22; // cargo por prenda (bolsas, etiquetas, etc.)
+let fondoInversion = 0; // monto manual del "fondo de inversión", aparte del capital a reponer
+let categoriasConTalla = ['Franela', 'Hoodie', 'Pantalón', 'Gorra', 'Short', 'Chaqueta', 'Camisa', 'Mono']; // categorías que muestran tallas y diseño
 
 // Edición de ventas (modal #edit-sale-modal)
 let editingSaleId = null;
@@ -1162,6 +1385,27 @@ let currentConvDireccion = null;
 let editingMovId = null; // id del movimiento en edición (null = registro nuevo)
 const CUENTA_LABEL = { bs: 'Banco (Bs)', binance: 'Binance (USDT)' };
 const TIPO_LABEL = { ingreso: 'Ingreso', gasto: 'Gasto', conversion: 'Conversión' };
+
+// Estado de pago de una venta, según el monto abonado vs. el total.
+const ESTADO_PAGO_LABEL = { completo: 'Pagado', parcial: 'Pago Parcial', no_pagado: 'No Pagado' };
+const ESTADO_PAGO_CLS = {
+  completo: 'bg-emerald-950/40 text-emerald-400 border-emerald-800',
+  parcial: 'bg-amber-950/40 text-amber-400 border-amber-800',
+  no_pagado: 'bg-red-950/40 text-red-400 border-red-800',
+};
+function computeEstadoPago(montoAbonado, total) {
+  const abonado = Number(montoAbonado) || 0;
+  const tot = Number(total) || 0;
+  if (abonado <= 0) return 'no_pagado';
+  if (abonado >= tot) return 'completo';
+  return 'parcial';
+}
+function estadoPagoBadgeHtml(sale) {
+  const estado = sale.estadoPago || 'completo';
+  const label = ESTADO_PAGO_LABEL[estado] || ESTADO_PAGO_LABEL.completo;
+  const cls = ESTADO_PAGO_CLS[estado] || ESTADO_PAGO_CLS.completo;
+  return `<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full border ${cls}">${label}</span>`;
+}
 
 /* ============================================================
    3) UTILIDADES
@@ -1188,10 +1432,48 @@ const fmtTime = (d) => d ? new Date(d).toLocaleTimeString('es-VE', { hour: '2-di
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 function totalStock(product) {
+  if (product.manejaTallas === false) return Number(product.stockUnico) || 0;
   return Object.values(product.tallas || {}).reduce((a, b) => a + (Number(b) || 0), 0);
 }
+function stockDeficitOf(product) {
+  return Number.isFinite(Number(product?.stockDeficit)) && product?.stockDeficit !== '' && product?.stockDeficit !== undefined && product?.stockDeficit !== null
+    ? Number(product.stockDeficit)
+    : LOW_STOCK_THRESHOLD;
+}
+function stockObjetivoOf(product) {
+  return Number.isFinite(Number(product?.stockObjetivo)) && product?.stockObjetivo !== '' && product?.stockObjetivo !== undefined && product?.stockObjetivo !== null
+    ? Number(product.stockObjetivo)
+    : DEFAULT_STOCK_OBJETIVO;
+}
+// Déficit/Objetivo por talla: si el producto tiene un valor propio guardado para esa talla, se usa ese;
+// si no, se cae al valor general del producto (stockDeficitOf/stockObjetivoOf).
+function deficitForTalla(product, size) {
+  const v = product?.tallasDeficit?.[size];
+  return Number.isFinite(Number(v)) && v !== '' && v !== undefined && v !== null ? Number(v) : stockDeficitOf(product);
+}
+function objetivoForTalla(product, size) {
+  const v = product?.tallasObjetivo?.[size];
+  return Number.isFinite(Number(v)) && v !== '' && v !== undefined && v !== null ? Number(v) : stockObjetivoOf(product);
+}
 function hasLowStock(product) {
-  return Object.values(product.tallas || {}).some((s) => Number(s) > 0 && Number(s) <= LOW_STOCK_THRESHOLD);
+  if (product.manejaTallas === false) {
+    const deficit = stockDeficitOf(product);
+    const s = Number(product.stockUnico) || 0;
+    return s > 0 && s <= deficit;
+  }
+  return Object.entries(product.tallas || {}).some(([size, s]) => Number(s) > 0 && Number(s) <= deficitForTalla(product, size));
+}
+// Agrupa las cantidades de ítems de inventario real (no "por pedido") por producto y por talla,
+// para que un mismo producto repetido en la venta (ej. dos tallas del mismo hoodie) se sume
+// una sola vez por producto en la transacción de Firestore, en vez de pisarse entre sí.
+function groupStockDeltas(items) {
+  const map = {};
+  (items || []).filter((it) => !it.porPedido && it.productId).forEach((it) => {
+    if (!map[it.productId]) map[it.productId] = { porTalla: {}, total: 0 };
+    map[it.productId].porTalla[it.talla] = (map[it.productId].porTalla[it.talla] || 0) + it.cantidad;
+    map[it.productId].total += it.cantidad;
+  });
+  return map;
 }
 
 function showToast(message, type = 'success') {
@@ -1271,11 +1553,66 @@ function listenProducts() {
     products = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderInventory();
     renderPOSProductOptions();
+    renderLowStockAlert();
   }, (err) => {
     console.error(err);
     showToast('Error al cargar inventario en tiempo real.', 'error');
   });
 }
+
+// Banner de alerta en el Dashboard: lista los productos (o tallas puntuales) que están
+// en o por debajo de su déficit de stock configurado.
+function getLowStockReponerRows() {
+  // Para cada producto con stock bajo, calcula cuántas unidades comprar de cada talla
+  // (o del stock único) para llegar al "Stock Objetivo" configurado (por talla, o general si no se definió).
+  return products.filter((p) => hasLowStock(p)).map((p) => {
+    let renglones;
+    if (p.manejaTallas === false) {
+      const objetivo = stockObjetivoOf(p);
+      const stock = totalStock(p);
+      renglones = [{ talla: null, stock, reponer: Math.max(0, objetivo - stock) }];
+    } else {
+      renglones = Object.entries(p.tallas || {})
+        .filter(([size, qty]) => Number(qty) > 0 && Number(qty) <= deficitForTalla(p, size))
+        .map(([s, qty]) => ({ talla: s, stock: Number(qty) || 0, reponer: Math.max(0, objetivoForTalla(p, s) - (Number(qty) || 0)) }));
+    }
+    return { product: p, renglones };
+  });
+}
+
+function renderLowStockAlert() {
+  const banner = document.getElementById('low-stock-alert');
+  if (!banner) return;
+  const rows = getLowStockReponerRows();
+  if (rows.length === 0) { banner.hidden = true; return; }
+  banner.hidden = false;
+  document.getElementById('low-stock-alert-title').textContent =
+    `Stock bajo: ${rows.length} producto${rows.length === 1 ? '' : 's'} necesitan reposición`;
+  document.getElementById('low-stock-alert-list').innerHTML = rows.map(({ product: p, renglones }) => {
+    const detalle = renglones.length
+      ? renglones.map((r) => r.talla ? `${r.talla}:${r.stock} (Reponer ${r.reponer})` : `${r.stock} uds. (Reponer ${r.reponer})`).join(' · ')
+      : `${totalStock(p)} uds.`;
+    return `<span class="text-xs px-2.5 py-1.5 rounded-lg bg-black/40 border border-amber-800/50 text-amber-300">${escapeHtml(p.nombre)} — ${escapeHtml(detalle)}</span>`;
+  }).join('');
+}
+
+document.getElementById('btn-copiar-reposicion').addEventListener('click', () => {
+  const rows = getLowStockReponerRows();
+  if (rows.length === 0) { showToast('No hay productos con stock bajo.', 'error'); return; }
+  const lines = ['Lista de compra — reposición de stock', ''];
+  let totalUnidades = 0;
+  rows.forEach(({ product: p, renglones }) => {
+    renglones.forEach((r) => {
+      if (r.reponer <= 0) return;
+      totalUnidades += r.reponer;
+      lines.push(r.talla ? `${p.nombre} — Talla ${r.talla}: comprar ${r.reponer} (stock actual ${r.stock})` : `${p.nombre}: comprar ${r.reponer} (stock actual ${r.stock})`);
+    });
+  });
+  lines.push('', `Total de unidades a comprar: ${totalUnidades}`);
+  navigator.clipboard.writeText(lines.join('\n'))
+    .then(() => showToast('Lista de compra copiada al portapapeles.'))
+    .catch(() => showToast('No se pudo copiar la lista.', 'error'));
+});
 
 function listenSales() {
   const colRef = fb.collection(db, 'sales');
@@ -1287,20 +1624,12 @@ function listenSales() {
     });
     if (currentSection === 'dashboard') renderDashboard();
     if (currentSection === 'historial') renderHistorial2();
+    updatePedidosPendientesBadge();
+    if (!document.getElementById('pedidos-pendientes-modal').hidden) renderPedidosPendientesModal();
+    renderReservaUsdt();
   }, (err) => {
     console.error(err);
     showToast('Error al cargar ventas en tiempo real.', 'error');
-  });
-}
-
-function listenAccounts() {
-  const colRef = fb.collection(db, 'accounts');
-  fb.onSnapshot(colRef, (snap) => {
-    snap.docs.forEach((d) => { accounts[d.id] = d.data().saldo || 0; });
-    renderAccountBalances();
-  }, (err) => {
-    console.error(err);
-    showToast('Error al cargar cuentas en tiempo real.', 'error');
   });
 }
 
@@ -1313,6 +1642,11 @@ function listenMovimientos() {
       return { id: d.id, ...data, fecha: data.fecha && data.fecha.toDate ? data.fecha.toDate() : new Date(data.fecha) };
     });
     renderMovimientos();
+    // El saldo de cada cuenta se recalcula siempre desde los movimientos que existen ahora mismo
+    // (nunca desde un total guardado aparte), así nunca queda desincronizado si se edita o borra
+    // un movimiento por fuera de la app.
+    renderAccountBalances();
+    renderReservaUsdt();
   }, (err) => {
     console.error(err);
     showToast('Error al cargar movimientos en tiempo real.', 'error');
@@ -1329,6 +1663,12 @@ function listenDesignPrices() {
         '22x28': Number(d.s22x28) || 0,
         '28x36': Number(d.s28x36) || 0,
         '40x40': Number(d.s40x40) || 0,
+      };
+      designCosts = {
+        '10x10': Number(d.c10x10) || 0,
+        '22x28': Number(d.c22x28) || 0,
+        '28x36': Number(d.c28x36) || 0,
+        '40x40': Number(d.c40x40) || 0,
       };
     }
     renderDesignPricesForm();
@@ -1353,59 +1693,156 @@ function listenFacturacionSettings() {
   });
 }
 
+function listenReservaUsdt() {
+  const ref = fb.doc(db, 'settings', 'reservaUsdt');
+  fb.onSnapshot(ref, (snap) => {
+    if (snap.exists()) {
+      fondoInversion = Number(snap.data().fondoInversion) || 0;
+    }
+    renderFondoInversionForm();
+    renderReservaUsdt();
+  }, (err) => {
+    console.error(err);
+    showToast('Error al cargar el fondo de inversión.', 'error');
+  });
+}
+
+function listenCategoriasConTalla() {
+  const ref = fb.doc(db, 'settings', 'categoriasTalla');
+  fb.onSnapshot(ref, (snap) => {
+    if (snap.exists() && Array.isArray(snap.data().categorias)) {
+      categoriasConTalla = snap.data().categorias;
+    }
+    renderCategoriasTallaForm();
+    populateFilterOptions();
+  }, (err) => {
+    console.error(err);
+    showToast('Error al cargar las categorías con talla.', 'error');
+  });
+}
+
 /* ============================================================
    6) INVENTARIO — CRUD
    ============================================================ */
-function buildSizeMatrix(existingTallas = {}) {
+function buildSizeMatrix(existingTallas = {}, existingDeficits = {}, existingObjetivos = {}) {
   selectedSizesInForm = new Set(Object.keys(existingTallas));
-  const wrap = document.getElementById('size-matrix');
-  wrap.innerHTML = SIZES.map((size) => {
-    const checked = existingTallas[size] !== undefined;
-    const stock = existingTallas[size] ?? '';
-    return `
-      <div class="flex flex-col items-center gap-1.5">
-        <button type="button" data-size="${size}" class="chip-size ${checked ? 'selected' : ''} w-full text-center py-2 rounded-lg border border-line text-xs font-medium">
-          ${size}
-        </button>
-        <input type="number" min="0" data-size-stock="${size}" placeholder="0"
-          value="${stock}"
-          class="input-dark w-full rounded-md px-2 py-1.5 text-xs text-center ${checked ? '' : 'opacity-40'}"
-          ${checked ? '' : 'disabled'} />
-      </div>`;
-  }).join('');
+  // Valores en memoria mientras se edita el formulario (para no perder lo escrito al marcar/desmarcar tallas).
+  const values = {};
+  SIZES.forEach((size) => {
+    values[size] = {
+      stock: existingTallas[size] ?? '',
+      deficit: existingDeficits[size] ?? '',
+      objetivo: existingObjetivos[size] ?? '',
+    };
+  });
 
-  wrap.querySelectorAll('.chip-size').forEach((btn) => {
+  const chipsWrap = document.getElementById('size-matrix-chips');
+  const rowsWrap = document.getElementById('size-matrix-rows');
+
+  function captureCurrentValues() {
+    rowsWrap.querySelectorAll('[data-size-stock]').forEach((input) => { values[input.dataset.sizeStock].stock = input.value; });
+    rowsWrap.querySelectorAll('[data-size-deficit]').forEach((input) => { values[input.dataset.sizeDeficit].deficit = input.value; });
+    rowsWrap.querySelectorAll('[data-size-objetivo]').forEach((input) => { values[input.dataset.sizeObjetivo].objetivo = input.value; });
+  }
+
+  function renderRows() {
+    const ordered = SIZES.filter((s) => selectedSizesInForm.has(s));
+    if (ordered.length === 0) {
+      rowsWrap.innerHTML = '<p class="text-xs text-zinc-600 py-2">Selecciona al menos una talla arriba.</p>';
+      return;
+    }
+    rowsWrap.innerHTML = ordered.map((size) => `
+      <div class="bg-black/20 rounded-lg p-2.5 space-y-1.5">
+        <span class="text-xs font-semibold">${size}</span>
+        <div class="grid grid-cols-3 gap-1.5">
+          <div>
+            <label class="text-[9px] text-zinc-500 uppercase block mb-0.5">Stock</label>
+            <input type="number" min="0" data-size-stock="${size}" placeholder="0" value="${values[size].stock}" class="input-dark w-full rounded-md px-2 py-1.5 text-xs text-center" />
+          </div>
+          <div>
+            <label class="text-[9px] text-zinc-500 uppercase block mb-0.5">Déficit</label>
+            <input type="number" min="0" data-size-deficit="${size}" placeholder="General" value="${values[size].deficit}" class="input-dark w-full rounded-md px-2 py-1.5 text-xs text-center" />
+          </div>
+          <div>
+            <label class="text-[9px] text-zinc-500 uppercase block mb-0.5">Objetivo</label>
+            <input type="number" min="0" data-size-objetivo="${size}" placeholder="General" value="${values[size].objetivo}" class="input-dark w-full rounded-md px-2 py-1.5 text-xs text-center" />
+          </div>
+        </div>
+      </div>`).join('');
+  }
+  renderRows();
+
+  chipsWrap.innerHTML = SIZES.map((size) => `
+    <button type="button" data-size="${size}" class="chip-size ${selectedSizesInForm.has(size) ? 'selected' : ''} w-full text-center py-2 rounded-lg border border-line text-xs font-medium">
+      ${size}
+    </button>`).join('');
+
+  chipsWrap.querySelectorAll('.chip-size').forEach((btn) => {
     btn.addEventListener('click', () => {
+      captureCurrentValues();
       const size = btn.dataset.size;
-      const input = wrap.querySelector(`[data-size-stock="${size}"]`);
       if (selectedSizesInForm.has(size)) {
         selectedSizesInForm.delete(size);
         btn.classList.remove('selected');
-        input.disabled = true;
-        input.classList.add('opacity-40');
       } else {
         selectedSizesInForm.add(size);
         btn.classList.add('selected');
-        input.disabled = false;
-        input.classList.remove('opacity-40');
-        input.focus();
       }
+      renderRows();
     });
   });
 }
 
+// ¿Esta categoría está en la lista de "Categorías con Talla"? (comparación sin mayúsculas/acentos de más)
+function isClothingCategory(categoria) {
+  const c = (categoria || '').trim().toLowerCase();
+  if (!c) return false;
+  return categoriasConTalla.some((x) => (x || '').trim().toLowerCase() === c);
+}
+// Cuando el producto maneja tallas, el Déficit/Objetivo generales pasan a ser solo el respaldo
+// que se usa si una talla no tiene su propio valor definido en la matriz.
+function updateDeficitObjetivoHelp(manejaTallas) {
+  document.getElementById('product-deficit-help').textContent = manejaTallas
+    ? 'Valor de respaldo: se usa en una talla solo si no le pones un Déficit propio en la matriz de tallas de abajo.'
+    : 'Cuando el stock único llegue a este número o menos, se marca como "Stock bajo".';
+  document.getElementById('product-objetivo-help').textContent = manejaTallas
+    ? 'Valor de respaldo: se usa en una talla solo si no le pones un Objetivo propio en la matriz de tallas de abajo.'
+    : 'Nivel ideal que quieres mantener de este producto. La alerta de stock bajo te dirá cuántas unidades comprar para llegar a este número.';
+}
+// Muestra/oculta la matriz de tallas y la opción de diseño según la categoría escrita en el formulario.
+function updateProductFormSections() {
+  const show = isClothingCategory(document.getElementById('product-categoria').value);
+  document.getElementById('size-matrix-wrap').hidden = !show;
+  document.getElementById('stock-unico-wrap').hidden = show;
+  document.getElementById('product-diseno-wrap').hidden = !show;
+  updateDeficitObjetivoHelp(show);
+  if (!show) document.getElementById('product-aplica-diseno').checked = false;
+}
+document.getElementById('product-categoria').addEventListener('input', updateProductFormSections);
+
 function openProductModal(product = null) {
   const form = document.getElementById('product-form');
   form.reset();
-  document.getElementById('product-modal-title').textContent = product ? 'EDITAR PRENDA' : 'NUEVA PRENDA';
+  document.getElementById('product-modal-title').textContent = product ? 'EDITAR PRODUCTO' : 'NUEVO PRODUCTO';
   document.getElementById('product-id').value = product?.id || '';
   document.getElementById('product-nombre').value = product?.nombre || '';
   document.getElementById('product-categoria').value = product?.categoria || '';
   document.getElementById('product-material').value = product?.material || '';
   document.getElementById('product-costo').value = product?.precioCosto ?? '';
   document.getElementById('product-precio').value = product?.precioVenta ?? '';
+  document.getElementById('product-deficit').value = product?.stockDeficit ?? LOW_STOCK_THRESHOLD;
+  document.getElementById('product-objetivo').value = product?.stockObjetivo ?? DEFAULT_STOCK_OBJETIVO;
+  document.getElementById('product-presentacion').value = product?.presentacionCosto ?? presentacionCargo;
   document.getElementById('product-aplica-diseno').checked = !!product?.aplicaDiseno;
-  buildSizeMatrix(product?.tallas || {});
+  document.getElementById('product-stock-unico').value = product?.stockUnico ?? '';
+  buildSizeMatrix(product?.tallas || {}, product?.tallasDeficit || {}, product?.tallasObjetivo || {});
+  // Al editar, muestra tallas/diseño si la categoría coincide con la lista O si el producto ya tenía tallas guardadas
+  // (para no "esconder" datos existentes solo porque luego se quitó esa categoría de la lista).
+  const show = product ? (isClothingCategory(product.categoria) || product.manejaTallas !== false) : isClothingCategory('');
+  document.getElementById('size-matrix-wrap').hidden = !show;
+  document.getElementById('stock-unico-wrap').hidden = show;
+  document.getElementById('product-diseno-wrap').hidden = !show;
+  updateDeficitObjetivoHelp(show);
   document.getElementById('product-modal').hidden = false;
 }
 function closeProductModal() { document.getElementById('product-modal').hidden = true; }
@@ -1419,14 +1856,31 @@ document.getElementById('product-modal').addEventListener('click', (e) => {
 
 document.getElementById('product-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!db) { showToast('Configura Firebase antes de guardar prendas.', 'error'); return; }
-  if (selectedSizesInForm.size === 0) { showToast('Selecciona al menos una talla.', 'error'); return; }
+  if (!db) { showToast('Configura Firebase antes de guardar productos.', 'error'); return; }
 
-  const tallas = {};
-  document.querySelectorAll('#size-matrix [data-size-stock]').forEach((input) => {
-    const size = input.dataset.sizeStock;
-    if (selectedSizesInForm.has(size)) tallas[size] = Number(input.value) || 0;
-  });
+  let tallas = {};
+  let tallasDeficit = {};
+  let tallasObjetivo = {};
+  let stockUnico = 0;
+  const manejaTallas = !document.getElementById('size-matrix-wrap').hidden;
+
+  if (manejaTallas) {
+    if (selectedSizesInForm.size === 0) { showToast('Selecciona al menos una talla.', 'error'); return; }
+    document.querySelectorAll('#size-matrix-rows [data-size-stock]').forEach((input) => {
+      const size = input.dataset.sizeStock;
+      if (selectedSizesInForm.has(size)) tallas[size] = Number(input.value) || 0;
+    });
+    document.querySelectorAll('#size-matrix-rows [data-size-deficit]').forEach((input) => {
+      const size = input.dataset.sizeDeficit;
+      if (selectedSizesInForm.has(size) && input.value !== '') tallasDeficit[size] = Number(input.value) || 0;
+    });
+    document.querySelectorAll('#size-matrix-rows [data-size-objetivo]').forEach((input) => {
+      const size = input.dataset.sizeObjetivo;
+      if (selectedSizesInForm.has(size) && input.value !== '') tallasObjetivo[size] = Number(input.value) || 0;
+    });
+  } else {
+    stockUnico = Number(document.getElementById('product-stock-unico').value) || 0;
+  }
 
   const id = document.getElementById('product-id').value;
   const payload = {
@@ -1435,8 +1889,15 @@ document.getElementById('product-form').addEventListener('submit', async (e) => 
     material: document.getElementById('product-material').value.trim(),
     precioCosto: parseMoneyInput(document.getElementById('product-costo').value),
     precioVenta: parseMoneyInput(document.getElementById('product-precio').value),
+    stockDeficit: Number(document.getElementById('product-deficit').value) || 0,
+    stockObjetivo: Number(document.getElementById('product-objetivo').value) || 0,
+    presentacionCosto: parseMoneyInput(document.getElementById('product-presentacion').value),
     aplicaDiseno: document.getElementById('product-aplica-diseno').checked,
+    manejaTallas,
     tallas,
+    tallasDeficit,
+    tallasObjetivo,
+    stockUnico,
     updatedAt: fb.serverTimestamp(),
   };
 
@@ -1445,23 +1906,23 @@ document.getElementById('product-form').addEventListener('submit', async (e) => 
     submitBtn.disabled = true;
     if (id) {
       await fb.updateDoc(fb.doc(db, 'products', id), payload);
-      showToast('Prenda actualizada correctamente.');
+      showToast('Producto actualizado correctamente.');
     } else {
       payload.createdAt = fb.serverTimestamp();
       await fb.addDoc(fb.collection(db, 'products'), payload);
-      showToast('Prenda registrada en el catálogo.');
+      showToast('Producto registrado en el catálogo.');
     }
     submitBtn.disabled = false;
     closeProductModal();
   } catch (err) {
     console.error(err);
-    showToast('Error al guardar la prenda.', 'error');
+    showToast('Error al guardar el producto.', 'error');
   }
 });
 
 function askDeleteProduct(id, nombre) {
   pendingDelete = { type: 'product', id };
-  document.getElementById('confirm-title').textContent = '¿ELIMINAR PRENDA?';
+  document.getElementById('confirm-title').textContent = '¿ELIMINAR PRODUCTO?';
   document.getElementById('confirm-text').textContent = `"${nombre}" se eliminará permanentemente del catálogo.`;
   document.getElementById('confirm-modal').hidden = false;
 }
@@ -1487,7 +1948,7 @@ document.getElementById('confirm-ok').addEventListener('click', async () => {
   try {
     if (type === 'product') {
       await fb.deleteDoc(fb.doc(db, 'products', id));
-      showToast('Prenda eliminada.');
+      showToast('Producto eliminado.');
     } else if (type === 'sale') {
       await deleteSale(id);
       showToast('Venta eliminada y stock restituido.');
@@ -1509,6 +1970,10 @@ function renderDesignPricesForm() {
   document.getElementById('precio-22x28').value = designPrices['22x28'] || '';
   document.getElementById('precio-28x36').value = designPrices['28x36'] || '';
   document.getElementById('precio-40x40').value = designPrices['40x40'] || '';
+  document.getElementById('costo-10x10').value = designCosts['10x10'] || '';
+  document.getElementById('costo-22x28').value = designCosts['22x28'] || '';
+  document.getElementById('costo-28x36').value = designCosts['28x36'] || '';
+  document.getElementById('costo-40x40').value = designCosts['40x40'] || '';
 }
 
 document.getElementById('design-prices-form').addEventListener('submit', async (e) => {
@@ -1519,6 +1984,10 @@ document.getElementById('design-prices-form').addEventListener('submit', async (
     s22x28: parseMoneyInput(document.getElementById('precio-22x28').value),
     s28x36: parseMoneyInput(document.getElementById('precio-28x36').value),
     s40x40: parseMoneyInput(document.getElementById('precio-40x40').value),
+    c10x10: parseMoneyInput(document.getElementById('costo-10x10').value),
+    c22x28: parseMoneyInput(document.getElementById('costo-22x28').value),
+    c28x36: parseMoneyInput(document.getElementById('costo-28x36').value),
+    c40x40: parseMoneyInput(document.getElementById('costo-40x40').value),
     updatedAt: fb.serverTimestamp(),
   };
   const submitBtn = e.target.querySelector('button[type="submit"]');
@@ -1555,6 +2024,88 @@ document.getElementById('presentacion-form').addEventListener('submit', async (e
   submitBtn.disabled = false;
 });
 
+/* ---------- Reserva Recomendada en USDT (fondo de inversión + capital a reponer) ---------- */
+function renderFondoInversionForm() {
+  const input = document.getElementById('input-fondo-inversion');
+  if (input) input.value = fondoInversion || '';
+}
+
+document.getElementById('fondo-inversion-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!db) { showToast('Configura Firebase antes de guardar el fondo de inversión.', 'error'); return; }
+  const monto = parseMoneyInput(document.getElementById('input-fondo-inversion').value);
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  try {
+    await fb.setDoc(fb.doc(db, 'settings', 'reservaUsdt'), { fondoInversion: monto, updatedAt: fb.serverTimestamp() }, { merge: true });
+    showToast('Fondo de inversión actualizado.');
+  } catch (err) {
+    console.error(err);
+    showToast('Error al guardar el fondo de inversión.', 'error');
+  }
+  submitBtn.disabled = false;
+});
+
+// Filtra ventas por periodo (sin búsqueda de texto), independiente del filtro del Dashboard,
+// para poder consultar la reserva recomendada de USDT por su propio periodo.
+function getSalesByPeriod(filterVal) {
+  const now = new Date();
+  let start = null;
+  if (filterVal === 'hoy') start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  else if (filterVal === '7d') { start = new Date(now); start.setDate(start.getDate() - 7); }
+  else if (filterVal === 'mes') start = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (!start) return sales;
+  return sales.filter((s) => s.fecha >= start);
+}
+
+function renderReservaUsdt() {
+  const totalEl = document.getElementById('reserva-total');
+  if (!totalEl) return; // la sección de Cuentas & Caja aún no está en el DOM en este render
+  const periodo = document.getElementById('reserva-usdt-periodo').value;
+  const filtered = getSalesByPeriod(periodo);
+
+  const capitalProducto = filtered.reduce((a, s) => a + (s.totalCosto || 0), 0);
+  const gastosPresentacion = filtered.reduce((a, s) => a + (s.presentacionTotal || 0), 0);
+  const costoDisenos = filtered.reduce((a, s) => a + (s.totalDisenoCosto ?? (s.items || []).reduce((b, it) => b + (Number(it.disenoCosto) || 0) * it.cantidad, 0)), 0);
+  const total = capitalProducto + gastosPresentacion + costoDisenos + (Number(fondoInversion) || 0);
+
+  document.getElementById('reserva-capital-producto').textContent = fmtMoney(capitalProducto);
+  document.getElementById('reserva-presentacion').textContent = fmtMoney(gastosPresentacion);
+  document.getElementById('reserva-disenos').textContent = fmtMoney(costoDisenos);
+  document.getElementById('reserva-fondo-inversion').textContent = fmtMoney(fondoInversion);
+  totalEl.textContent = fmtMoney(total);
+
+  const saldoActual = Number(accounts.binance) || 0;
+  document.getElementById('reserva-saldo-actual').textContent = fmtByCuenta(saldoActual, 'binance');
+  const diferencia = saldoActual - total;
+  const diferenciaEl = document.getElementById('reserva-diferencia');
+  diferenciaEl.textContent = (diferencia >= 0 ? 'Te sobran ' : 'Te faltan ') + fmtMoney(Math.abs(diferencia));
+  diferenciaEl.className = 'text-sm font-medium ' + (diferencia >= 0 ? 'text-emerald-400' : 'text-red-400');
+}
+document.getElementById('reserva-usdt-periodo').addEventListener('change', renderReservaUsdt);
+
+function renderCategoriasTallaForm() {
+  const input = document.getElementById('categorias-talla-input');
+  if (input) input.value = categoriasConTalla.join(', ');
+}
+
+document.getElementById('categorias-talla-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!db) { showToast('Configura Firebase antes de guardar categorías.', 'error'); return; }
+  const categorias = document.getElementById('categorias-talla-input').value
+    .split(',').map((c) => c.trim()).filter(Boolean);
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  try {
+    await fb.setDoc(fb.doc(db, 'settings', 'categoriasTalla'), { categorias, updatedAt: fb.serverTimestamp() }, { merge: true });
+    showToast('Categorías con talla actualizadas.');
+  } catch (err) {
+    console.error(err);
+    showToast('Error al guardar las categorías.', 'error');
+  }
+  submitBtn.disabled = false;
+});
+
 /* ---------- Render inventario ---------- */
 function populateFilterOptions() {
   const categorias = [...new Set(products.map((p) => p.categoria).filter(Boolean))].sort();
@@ -1565,6 +2116,13 @@ function populateFilterOptions() {
   catSel.innerHTML = '<option value="">Todas las categorías</option>' + categorias.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   matSel.innerHTML = '<option value="">Todos los materiales</option>' + materiales.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join('');
   catSel.value = curCat; matSel.value = curMat;
+
+  // Sugerencias del formulario de nuevo producto: las categorías con talla + las que ya usas en tu catálogo.
+  const catOptions = document.getElementById('categoria-options');
+  if (catOptions) {
+    const todas = [...new Set([...categoriasConTalla, ...categorias].filter(Boolean))].sort();
+    catOptions.innerHTML = todas.map((c) => `<option value="${escapeHtml(c)}"></option>`).join('');
+  }
 }
 
 function renderInventory() {
@@ -1588,13 +2146,25 @@ function renderInventory() {
   grid.innerHTML = filtered.map((p, i) => {
     const margen = p.precioVenta ? (((p.precioVenta - p.precioCosto) / p.precioVenta) * 100).toFixed(0) : '0';
     const stock = totalStock(p);
-    const sizeChips = SIZES.filter((s) => p.tallas && p.tallas[s] !== undefined).map((s) => {
-      const qty = p.tallas[s];
-      const low = qty > 0 && qty <= LOW_STOCK_THRESHOLD;
+    const manejaTallas = p.manejaTallas !== false;
+    const deficit = stockDeficitOf(p);
+    let sizeChips;
+    if (manejaTallas) {
+      sizeChips = SIZES.filter((s) => p.tallas && p.tallas[s] !== undefined).map((s) => {
+        const qty = p.tallas[s];
+        const deficitTalla = deficitForTalla(p, s);
+        const low = qty > 0 && qty <= deficitTalla;
+        const empty = qty === 0;
+        const cls = empty ? 'border-red-900 text-red-500 bg-red-950/30' : low ? 'border-amber-700 text-amber-400 bg-amber-950/20' : 'border-line text-silver';
+        return `<span class="text-[10px] px-1.5 py-1 rounded border ${cls}" title="Alerta ≤ ${deficitTalla}">${s}:${qty}</span>`;
+      }).join('');
+    } else {
+      const qty = Number(p.stockUnico) || 0;
+      const low = qty > 0 && qty <= deficit;
       const empty = qty === 0;
       const cls = empty ? 'border-red-900 text-red-500 bg-red-950/30' : low ? 'border-amber-700 text-amber-400 bg-amber-950/20' : 'border-line text-silver';
-      return `<span class="text-[10px] px-1.5 py-1 rounded border ${cls}">${s}:${qty}</span>`;
-    }).join('');
+      sizeChips = `<span class="text-[10px] px-1.5 py-1 rounded border ${cls}">Sin talla · Stock:${qty}</span>`;
+    }
 
     return `
       <div class="glass rounded-2xl p-5 card-press anim-slide-up stagger-${(i % 5) + 1}">
@@ -1611,7 +2181,7 @@ function renderInventory() {
 
         <div class="flex flex-wrap gap-1.5 mt-3">${sizeChips || '<span class="text-[10px] text-zinc-600">Sin tallas registradas</span>'}</div>
 
-        <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+        <div class="grid grid-cols-4 gap-2 mt-4 text-center">
           <div class="bg-black/40 rounded-lg py-2">
             <p class="text-[10px] text-zinc-500 uppercase">Costo</p>
             <p class="text-sm font-medium">${fmtMoney(p.precioCosto)}</p>
@@ -1624,10 +2194,14 @@ function renderInventory() {
             <p class="text-[10px] text-zinc-500 uppercase">Margen</p>
             <p class="text-sm font-medium">${margen}%</p>
           </div>
+          <div class="bg-black/40 rounded-lg py-2">
+            <p class="text-[10px] text-zinc-500 uppercase">Presentación</p>
+            <p class="text-sm font-medium">${fmtMoney(p.presentacionCosto ?? presentacionCargo)}</p>
+          </div>
         </div>
 
         <div class="flex items-center justify-between mt-4">
-          <span class="text-xs text-zinc-500">Stock total: <span class="text-white font-medium">${stock}</span> uds.</span>
+          <span class="text-xs text-zinc-500">Stock total: <span class="text-white font-medium">${stock}</span> uds. ${manejaTallas ? '<span class="text-zinc-600">(pasa el cursor sobre una talla para ver su alerta)</span>' : `<span class="text-zinc-600">(alerta ≤ ${deficit})</span>`}</span>
           <div class="flex gap-2">
             <button data-edit="${p.id}" class="btn-ghost rounded-lg px-3 py-1.5 text-xs">Editar</button>
             <button data-del="${p.id}" data-name="${escapeHtml(p.nombre)}" class="btn-danger rounded-lg px-3 py-1.5 text-xs">Eliminar</button>
@@ -1655,24 +2229,31 @@ document.getElementById('filter-low-stock').addEventListener('change', renderInv
    7) POS — CARRITO Y VENTA
    ============================================================ */
 
-/* ---------- Diseño / Estampado en el POS ---------- */
+/* ---------- Diseño / Estampado en el POS (se pueden elegir varios tamaños por prenda) ---------- */
+function getSelectedDisenoSizes() {
+  return Array.from(document.querySelectorAll('#pos-diseno-checks .pos-diseno-check:checked')).map((cb) => cb.value);
+}
+
 function refreshPosDisenoOptions() {
-  const sel = document.getElementById('pos-diseno');
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Sin diseño</option>' +
-    DESIGN_SIZES.map((s) => `<option value="${s}">${s} cm — +${fmtMoney(designPrices[s] || 0)}</option>`).join('');
-  sel.value = DESIGN_SIZES.includes(cur) ? cur : '';
+  const wrap = document.getElementById('pos-diseno-checks');
+  if (!wrap) return;
+  const prevChecked = getSelectedDisenoSizes();
+  wrap.innerHTML = DESIGN_SIZES.map((s) => `
+    <label class="flex items-center gap-1.5 text-xs bg-black/30 rounded-lg px-2 py-1.5 cursor-pointer border border-transparent hover:border-line">
+      <input type="checkbox" class="pos-diseno-check accent-white shrink-0" value="${s}" ${prevChecked.includes(s) ? 'checked' : ''} />
+      <span>${s} cm — +${fmtMoney(designPrices[s] || 0)}</span>
+    </label>`).join('');
+  wrap.querySelectorAll('.pos-diseno-check').forEach((cb) => cb.addEventListener('change', updatePosDisenoInfo));
   updatePosDisenoInfo();
 }
 
 function updatePosDisenoInfo() {
   const infoEl = document.getElementById('pos-diseno-extra-info');
-  const sel = document.getElementById('pos-diseno');
-  if (!infoEl || !sel) return;
-  const size = sel.value;
-  if (size) {
-    infoEl.textContent = `+ ${fmtMoney(designPrices[size] || 0)} por unidad (diseño ${size} cm)`;
+  if (!infoEl) return;
+  const sizes = getSelectedDisenoSizes();
+  if (sizes.length) {
+    const total = sizes.reduce((a, s) => a + (Number(designPrices[s]) || 0), 0);
+    infoEl.textContent = `+ ${fmtMoney(total)} por unidad (diseño ${sizes.join('cm + ')}cm)`;
     infoEl.hidden = false;
   } else {
     infoEl.hidden = true;
@@ -1683,11 +2264,10 @@ function setDisenoVisible(show) {
   const wrap = document.getElementById('pos-diseno-wrap');
   if (!wrap) return;
   wrap.hidden = !show;
-  if (!show) document.getElementById('pos-diseno').value = '';
+  if (!show) document.querySelectorAll('#pos-diseno-checks .pos-diseno-check').forEach((cb) => { cb.checked = false; });
   updatePosDisenoInfo();
 }
 
-document.getElementById('pos-diseno').addEventListener('change', updatePosDisenoInfo);
 document.getElementById('pos-custom-aplica-diseno').addEventListener('change', (e) => {
   setDisenoVisible(e.target.checked);
 });
@@ -1779,18 +2359,26 @@ document.getElementById('pos-product').addEventListener('change', (e) => {
 
   const info = document.getElementById('pos-product-info');
   info.hidden = false;
-  info.textContent = `${product.categoria} · ${product.material} · Costo: ${fmtMoney(product.precioCosto)}`;
+  const presentacionProducto = product.presentacionCosto !== undefined && product.presentacionCosto !== null ? Number(product.presentacionCosto) || 0 : Number(presentacionCargo) || 0;
+  info.textContent = `${product.categoria} · ${product.material} · Costo: ${fmtMoney(product.precioCosto)} · Presentación: ${fmtMoney(presentacionProducto)}`;
 
   document.getElementById('pos-precio').value = product.precioVenta;
   document.getElementById('pos-precio').disabled = false;
   setDisenoVisible(!!product.aplicaDiseno);
 
+  const manejaTallas = product.manejaTallas !== false;
+
   if (posMode === 'pedido') {
-    // Por pedido: se puede elegir cualquier talla, sin límite de stock.
-    tallaSel.innerHTML = SIZES.map((s) => {
-      const stock = product.tallas && product.tallas[s] !== undefined ? product.tallas[s] : null;
-      return `<option value="${s}">${stock === null ? s : `${s} (${stock} en stock)`}</option>`;
-    }).join('');
+    // Por pedido: se puede elegir cualquier talla/variante, sin límite de stock.
+    if (manejaTallas) {
+      tallaSel.innerHTML = SIZES.map((s) => {
+        const stock = product.tallas && product.tallas[s] !== undefined ? product.tallas[s] : null;
+        return `<option value="${s}">${stock === null ? s : `${s} (${stock} en stock)`}</option>`;
+      }).join('');
+    } else {
+      const stock = Number(product.stockUnico) || 0;
+      tallaSel.innerHTML = `<option value="Única">Única (${stock} en stock)</option>`;
+    }
     tallaSel.disabled = false;
     document.getElementById('pos-cantidad').disabled = false;
     document.getElementById('pos-cantidad').value = 1;
@@ -1798,7 +2386,7 @@ document.getElementById('pos-product').addEventListener('change', (e) => {
     document.getElementById('pos-costo').value = product.precioCosto ?? 0;
     document.getElementById('pos-costo').disabled = false;
     document.getElementById('btn-add-cart').disabled = false;
-  } else {
+  } else if (manejaTallas) {
     const sizesInStock = SIZES.filter((s) => product.tallas && product.tallas[s] > 0);
     tallaSel.innerHTML = sizesInStock.length
       ? sizesInStock.map((s) => `<option value="${s}">${s} (${product.tallas[s]} disp.)</option>`).join('')
@@ -1807,6 +2395,15 @@ document.getElementById('pos-product').addEventListener('change', (e) => {
     document.getElementById('pos-cantidad').disabled = sizesInStock.length === 0;
     document.getElementById('pos-cantidad').value = 1;
     document.getElementById('btn-add-cart').disabled = sizesInStock.length === 0;
+  } else {
+    // Producto sin tallas: un solo stock total.
+    const stock = Number(product.stockUnico) || 0;
+    tallaSel.innerHTML = stock > 0 ? `<option value="Única">Única (${stock} disp.)</option>` : '<option value="">Sin stock</option>';
+    tallaSel.disabled = stock === 0;
+    document.getElementById('pos-cantidad').disabled = stock === 0;
+    document.getElementById('pos-cantidad').value = 1;
+    document.getElementById('pos-cantidad').max = stock;
+    document.getElementById('btn-add-cart').disabled = stock === 0;
   }
 });
 
@@ -1817,7 +2414,7 @@ document.getElementById('pos-talla').addEventListener('change', () => {
   const size = document.getElementById('pos-talla').value;
   const cantidadInput = document.getElementById('pos-cantidad');
   if (product && size) {
-    const max = product.tallas[size] || 0;
+    const max = product.manejaTallas === false ? (Number(product.stockUnico) || 0) : (product.tallas[size] || 0);
     cantidadInput.max = max;
     if (Number(cantidadInput.value) > max) cantidadInput.value = max;
   }
@@ -1827,9 +2424,16 @@ document.getElementById('btn-add-cart').addEventListener('click', () => {
   const talla = document.getElementById('pos-talla').value;
   const cantidad = Number(document.getElementById('pos-cantidad').value) || 0;
   const precioUnitario = parseMoneyInput(document.getElementById('pos-precio').value);
-  const disenoTamano = document.getElementById('pos-diseno-wrap').hidden ? null : (document.getElementById('pos-diseno').value || null);
-  const disenoPrecio = disenoTamano ? (Number(designPrices[disenoTamano]) || 0) : 0;
-  const presentacionUnit = Number(presentacionCargo) || 0;
+  const disenoSizesSelected = document.getElementById('pos-diseno-wrap').hidden ? [] : getSelectedDisenoSizes();
+  const disenoTamano = disenoSizesSelected.length ? disenoSizesSelected.join('cm + ') + 'cm' : null;
+  const disenoPrecio = disenoSizesSelected.reduce((a, s) => a + (Number(designPrices[s]) || 0), 0);
+  const disenoCosto = disenoSizesSelected.reduce((a, s) => a + (Number(designCosts[s]) || 0), 0);
+  // Producto del catálogo (si aplica), buscado antes para poder usar su costo de presentación propio.
+  const productId = document.getElementById('pos-product').value;
+  const product = products.find((p) => p.id === productId);
+  const presentacionUnit = (product && product.presentacionCosto !== undefined && product.presentacionCosto !== null)
+    ? Number(product.presentacionCosto) || 0
+    : Number(presentacionCargo) || 0;
   const precioFinal = precioUnitario + disenoPrecio + presentacionUnit;
 
   // ---- Caso 1: producto personalizado por pedido (fuera del catálogo) ----
@@ -1846,7 +2450,7 @@ document.getElementById('btn-add-cart').addEventListener('click', () => {
 
     cart.push({
       productId: null, nombre, categoria, material, talla, cantidad, precioUnitario, costoUnitario,
-      disenoTamano, disenoPrecio, presentacionUnit, subtotal: cantidad * precioFinal, porPedido: true,
+      disenoTamano, disenoPrecio, disenoCosto, presentacionUnit, subtotal: cantidad * precioFinal, porPedido: true,
     });
 
     renderCart();
@@ -1860,15 +2464,13 @@ document.getElementById('btn-add-cart').addEventListener('click', () => {
   }
 
   // ---- Caso 2 y 3: producto del catálogo (con o sin descuento de stock) ----
-  const productId = document.getElementById('pos-product').value;
-  const product = products.find((p) => p.id === productId);
   if (!product || !talla || cantidad < 1) { showToast('Completa producto, talla y cantidad.', 'error'); return; }
 
   if (posMode === 'pedido') {
     const costoUnitario = parseMoneyInput(document.getElementById('pos-costo').value) || Number(product.precioCosto) || 0;
     cart.push({
       productId: product.id, nombre: product.nombre, categoria: product.categoria, material: product.material,
-      talla, cantidad, precioUnitario, costoUnitario, disenoTamano, disenoPrecio, presentacionUnit,
+      talla, cantidad, precioUnitario, costoUnitario, disenoTamano, disenoPrecio, disenoCosto, presentacionUnit,
       subtotal: cantidad * precioFinal, porPedido: true,
     });
     renderCart();
@@ -1879,10 +2481,10 @@ document.getElementById('btn-add-cart').addEventListener('click', () => {
   }
 
   // Modo inventario: comportamiento original, valida y descuenta stock real.
-  const availableStock = product.tallas[talla] || 0;
+  const availableStock = product.manejaTallas === false ? (Number(product.stockUnico) || 0) : (product.tallas[talla] || 0);
   const alreadyInCart = cart.filter((it) => it.productId === product.id && it.talla === talla && !it.porPedido).reduce((a, it) => a + it.cantidad, 0);
   if (cantidad + alreadyInCart > availableStock) {
-    showToast(`Solo hay ${availableStock} unidades disponibles en talla ${talla}.`, 'error');
+    showToast(product.manejaTallas === false ? `Solo hay ${availableStock} unidades disponibles.` : `Solo hay ${availableStock} unidades disponibles en talla ${talla}.`, 'error');
     return;
   }
 
@@ -1897,6 +2499,7 @@ document.getElementById('btn-add-cart').addEventListener('click', () => {
     costoUnitario: Number(product.precioCosto) || 0,
     disenoTamano,
     disenoPrecio,
+    disenoCosto,
     presentacionUnit,
     subtotal: cantidad * precioFinal,
     porPedido: false,
@@ -1920,7 +2523,7 @@ function renderCart() {
             <p class="text-sm font-medium truncate">${escapeHtml(it.nombre)}</p>
             ${it.porPedido ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
           </div>
-          <p class="text-[11px] text-silver">Talla ${it.talla} · x${it.cantidad} · ${fmtMoney(it.precioUnitario)} c/u${it.disenoTamano ? ` · Diseño ${it.disenoTamano}cm (+${fmtMoney(it.disenoPrecio)})` : ''}</p>
+          <p class="text-[11px] text-silver">Talla ${it.talla} · x${it.cantidad} · ${fmtMoney(it.precioUnitario)} c/u${it.disenoTamano ? ` · Diseño ${it.disenoTamano} (+${fmtMoney(it.disenoPrecio)})` : ''}</p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <span class="text-sm font-semibold">${fmtMoney(it.subtotal)}</span>
@@ -1942,19 +2545,39 @@ function renderCart() {
   document.getElementById('cart-presentacion').textContent = fmtMoney(presentacionTotal);
   document.getElementById('cart-total').textContent = fmtMoney(totalAmount);
   document.getElementById('btn-complete-sale').disabled = cart.length === 0;
+  updatePagoParcialUI();
 }
+
+// Actualiza el badge de estado de pago y el saldo pendiente en vivo, según el total del carrito
+// y el checkbox/monto que haya elegido el cajero.
+function updatePagoParcialUI() {
+  const wrap = document.getElementById('pos-monto-abonado-wrap');
+  const completo = document.getElementById('pos-pago-completo').checked;
+  wrap.hidden = completo;
+  if (completo) return;
+  const total = cart.reduce((a, it) => a + it.subtotal, 0);
+  const input = document.getElementById('pos-monto-abonado');
+  if (input.value === '') input.value = '0.00';
+  const abonado = Math.max(0, Math.min(parseMoneyInput(input.value), total));
+  const estado = computeEstadoPago(abonado, total);
+  document.getElementById('pos-estado-pago-badge').innerHTML = estadoPagoBadgeHtml({ estadoPago: estado });
+  document.getElementById('pos-saldo-pendiente').textContent = `Saldo pendiente: ${fmtMoney(Math.max(0, total - abonado))}`;
+}
+document.getElementById('pos-pago-completo').addEventListener('change', updatePagoParcialUI);
+document.getElementById('pos-monto-abonado').addEventListener('input', updatePagoParcialUI);
 
 function readClienteForm() {
   return {
     nombre: document.getElementById('pos-cliente-nombre').value.trim(),
     cedula: document.getElementById('pos-cliente-cedula').value.trim(),
+    telefono: document.getElementById('pos-cliente-telefono').value.trim(),
     estado: document.getElementById('pos-cliente-estado').value.trim(),
     pais: document.getElementById('pos-cliente-pais').value.trim(),
     agenciaEnvio: document.getElementById('pos-cliente-agencia').value.trim(),
   };
 }
 function resetClienteForm() {
-  ['pos-cliente-nombre', 'pos-cliente-cedula', 'pos-cliente-estado', 'pos-cliente-pais', 'pos-cliente-agencia'].forEach((id) => {
+  ['pos-cliente-nombre', 'pos-cliente-cedula', 'pos-cliente-telefono', 'pos-cliente-estado', 'pos-cliente-pais', 'pos-cliente-agencia'].forEach((id) => {
     document.getElementById(id).value = '';
   });
 }
@@ -1964,8 +2587,8 @@ document.getElementById('btn-complete-sale').addEventListener('click', async () 
   if (cart.length === 0) return;
 
   const cliente = readClienteForm();
-  if (!cliente.nombre || !cliente.cedula || !cliente.estado || !cliente.pais || !cliente.agenciaEnvio) {
-    showToast('Completa los datos del cliente (nombre, cédula, estado, país y agencia de envío).', 'error');
+  if (!cliente.nombre || !cliente.cedula || !cliente.telefono || !cliente.estado || !cliente.pais || !cliente.agenciaEnvio) {
+    showToast('Completa los datos del cliente (nombre, cédula, teléfono, estado, país y agencia de envío).', 'error');
     return;
   }
 
@@ -1975,36 +2598,65 @@ document.getElementById('btn-complete-sale').addEventListener('click', async () 
 
   const metodoPago = document.getElementById('pos-metodo').value;
   const itemsSnapshot = [...cart];
-  // Solo los ítems del inventario (no marcados "por pedido") descuentan stock real.
-  const stockItems = itemsSnapshot.filter((it) => !it.porPedido && it.productId);
+  const totalVenta = itemsSnapshot.reduce((a, it) => a + it.subtotal, 0);
+  const pagoCompleto = document.getElementById('pos-pago-completo').checked;
+  const montoAbonado = pagoCompleto ? totalVenta : Math.max(0, Math.min(parseMoneyInput(document.getElementById('pos-monto-abonado').value), totalVenta));
+  const estadoPago = computeEstadoPago(montoAbonado, totalVenta);
   const tienePedido = itemsSnapshot.some((it) => it.porPedido);
+  // Solo los ítems del inventario (no marcados "por pedido") descuentan stock real; se agrupan por
+  // producto para no pisarse cuando el mismo producto aparece más de una vez en la venta.
+  const stockDeltas = groupStockDeltas(itemsSnapshot);
+  const stockProductIds = Object.keys(stockDeltas);
 
+  const lowStockAlerts = []; // { nombre, detalle } — se llena dentro de la transacción y se avisa después
   try {
     const saleRef = fb.doc(fb.collection(db, 'sales'));
     await fb.runTransaction(db, async (transaction) => {
-      const productRefs = stockItems.map((it) => fb.doc(db, 'products', it.productId));
+      lowStockAlerts.length = 0;
+      const productRefs = stockProductIds.map((id) => fb.doc(db, 'products', id));
       const productDocs = await Promise.all(productRefs.map((ref) => transaction.get(ref)));
 
       productDocs.forEach((docSnap, idx) => {
-        const it = stockItems[idx];
-        if (!docSnap.exists()) throw new Error(`El producto "${it.nombre}" ya no existe.`);
+        const productId = stockProductIds[idx];
+        const delta = stockDeltas[productId];
+        if (!docSnap.exists()) throw new Error('Uno de los productos de la venta ya no existe.');
         const data = docSnap.data();
-        const currentStock = (data.tallas && data.tallas[it.talla]) || 0;
-        if (currentStock < it.cantidad) throw new Error(`Stock insuficiente para ${it.nombre} (talla ${it.talla}).`);
+        if (data.manejaTallas === false) {
+          const currentStock = Number(data.stockUnico) || 0;
+          if (currentStock < delta.total) throw new Error(`Stock insuficiente para ${data.nombre || 'un producto'}.`);
+        } else {
+          Object.keys(delta.porTalla).forEach((talla) => {
+            const currentStock = (data.tallas && data.tallas[talla]) || 0;
+            if (currentStock < delta.porTalla[talla]) throw new Error(`Stock insuficiente para ${data.nombre || 'un producto'} (talla ${talla}).`);
+          });
+        }
       });
 
       productDocs.forEach((docSnap, idx) => {
-        const it = stockItems[idx];
+        const productId = stockProductIds[idx];
+        const delta = stockDeltas[productId];
         const ref = productRefs[idx];
         const data = docSnap.data();
-        const newTallas = { ...data.tallas, [it.talla]: data.tallas[it.talla] - it.cantidad };
-        transaction.update(ref, { tallas: newTallas });
+        const deficit = stockDeficitOf(data);
+        if (data.manejaTallas === false) {
+          const nuevoStock = (Number(data.stockUnico) || 0) - delta.total;
+          transaction.update(ref, { stockUnico: nuevoStock });
+          if (nuevoStock <= deficit) lowStockAlerts.push({ nombre: data.nombre, detalle: `${nuevoStock} uds.` });
+        } else {
+          const newTallas = { ...data.tallas };
+          Object.keys(delta.porTalla).forEach((talla) => { newTallas[talla] = (newTallas[talla] || 0) - delta.porTalla[talla]; });
+          transaction.update(ref, { tallas: newTallas });
+          Object.keys(delta.porTalla).forEach((talla) => {
+            if (newTallas[talla] <= deficitForTalla(data, talla)) lowStockAlerts.push({ nombre: data.nombre, detalle: `talla ${talla}: ${newTallas[talla]}` });
+          });
+        }
       });
 
       const total = itemsSnapshot.reduce((a, it) => a + it.subtotal, 0);
       const totalCosto = itemsSnapshot.reduce((a, it) => a + it.costoUnitario * it.cantidad, 0);
       const cantidadPrendas = itemsSnapshot.reduce((a, it) => a + it.cantidad, 0);
       const presentacionTotal = itemsSnapshot.reduce((a, it) => a + (Number(it.presentacionUnit) || 0) * it.cantidad, 0);
+      const totalDisenoCosto = itemsSnapshot.reduce((a, it) => a + (Number(it.disenoCosto) || 0) * it.cantidad, 0);
 
       transaction.set(saleRef, {
         items: itemsSnapshot,
@@ -2015,25 +2667,37 @@ document.getElementById('btn-complete-sale').addEventListener('click', async () 
         gananciaNeta: total - totalCosto,
         cantidadPrendas,
         presentacionTotal,
+        totalDisenoCosto,
         tienePedido,
+        montoAbonado,
+        estadoPago,
         fecha: fb.serverTimestamp(),
       });
     });
 
     showToast(tienePedido ? 'Venta registrada (incluye prendas por pedido, sin descontar stock).' : 'Venta completada y stock actualizado.');
+    if (lowStockAlerts.length > 0) {
+      const resumenAlerta = lowStockAlerts.map((a) => `${a.nombre} (${a.detalle})`).join(', ');
+      showToast(`Stock bajo: ${resumenAlerta}`, 'error');
+    }
     showReceipt({
       id: saleRef.id,
       items: itemsSnapshot,
       metodoPago,
       cliente,
-      total: itemsSnapshot.reduce((a, it) => a + it.subtotal, 0),
+      total: totalVenta,
       presentacionTotal: itemsSnapshot.reduce((a, it) => a + (Number(it.presentacionUnit) || 0) * it.cantidad, 0),
       fecha: new Date(),
       tienePedido,
+      montoAbonado,
+      estadoPago,
     });
     cart = [];
     renderCart();
     resetClienteForm();
+    document.getElementById('pos-pago-completo').checked = true;
+    document.getElementById('pos-monto-abonado').value = '';
+    updatePagoParcialUI();
   } catch (err) {
     console.error(err);
     showToast(err.message || 'Error al procesar la venta.', 'error');
@@ -2044,15 +2708,18 @@ document.getElementById('btn-complete-sale').addEventListener('click', async () 
 });
 
 /* ---------- Recibo ---------- */
+let currentReceiptFolio = '';
 function showReceipt(sale) {
+  currentReceiptFolio = sale.id.slice(0, 8).toUpperCase();
   document.getElementById('receipt-folio').textContent = 'Folio: ' + sale.id.slice(0, 8).toUpperCase();
   document.getElementById('receipt-date').textContent = fmtDate(sale.fecha) + ' · ' + fmtTime(sale.fecha);
   const cliente = sale.cliente || {};
   const clienteWrap = document.getElementById('receipt-cliente');
-  if (cliente.nombre || cliente.cedula || cliente.estado || cliente.pais || cliente.agenciaEnvio) {
+  if (cliente.nombre || cliente.cedula || cliente.telefono || cliente.estado || cliente.pais || cliente.agenciaEnvio) {
     clienteWrap.innerHTML = `
       ${cliente.nombre ? `<div class="flex justify-between"><span>Cliente</span><span class="text-white">${escapeHtml(cliente.nombre)}</span></div>` : ''}
       ${cliente.cedula ? `<div class="flex justify-between"><span>Cédula</span><span class="text-white">${escapeHtml(cliente.cedula)}</span></div>` : ''}
+      ${cliente.telefono ? `<div class="flex justify-between"><span>Teléfono</span><span class="text-white">${escapeHtml(cliente.telefono)}</span></div>` : ''}
       ${(cliente.estado || cliente.pais) ? `<div class="flex justify-between"><span>Estado / País</span><span class="text-white">${escapeHtml([cliente.estado, cliente.pais].filter(Boolean).join(' / '))}</span></div>` : ''}
       ${cliente.agenciaEnvio ? `<div class="flex justify-between"><span>Agencia de envío</span><span class="text-white">${escapeHtml(cliente.agenciaEnvio)}</span></div>` : ''}
     `;
@@ -2061,13 +2728,20 @@ function showReceipt(sale) {
   }
   document.getElementById('receipt-items').innerHTML = sale.items.map((it) => `
     <div class="flex justify-between text-xs">
-      <span class="text-silver">${escapeHtml(it.nombre)} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` · Diseño ${it.disenoTamano}cm` : ''}${it.porPedido ? ' <span class="text-amber-400">· Pedido</span>' : ''}</span>
+      <span class="text-silver">${escapeHtml(it.nombre)} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` · Diseño ${it.disenoTamano}` : ''}${it.porPedido ? ' <span class="text-amber-400">· Pedido</span>' : ''}</span>
       <span>${fmtMoney(it.subtotal)}</span>
     </div>`).join('');
   const presentacionTotal = sale.presentacionTotal ?? sale.items.reduce((a, it) => a + (Number(it.presentacionUnit) || 0) * it.cantidad, 0);
   document.getElementById('receipt-presentacion').textContent = fmtMoney(presentacionTotal);
   document.getElementById('receipt-total').textContent = fmtMoney(sale.total);
   document.getElementById('receipt-metodo').textContent = sale.metodoPago;
+  const montoAbonado = sale.montoAbonado ?? sale.total;
+  const estadoPago = sale.estadoPago || computeEstadoPago(montoAbonado, sale.total);
+  document.getElementById('receipt-estado-pago').innerHTML = estadoPagoBadgeHtml({ estadoPago });
+  const saldoWrap = document.getElementById('receipt-saldo-wrap');
+  const saldoPendiente = Math.max(0, (sale.total || 0) - montoAbonado);
+  saldoWrap.hidden = estadoPago === 'completo';
+  document.getElementById('receipt-saldo').textContent = fmtMoney(saldoPendiente);
   const tienePedido = sale.tienePedido ?? sale.items.some((it) => it.porPedido);
   document.getElementById('receipt-stock-note').textContent = tienePedido
     ? 'Incluye prendas por pedido: no se descontó stock de esas unidades.'
@@ -2078,6 +2752,28 @@ document.getElementById('btn-close-receipt').addEventListener('click', () => {
   document.getElementById('receipt-modal').hidden = true;
 });
 document.getElementById('btn-print-receipt').addEventListener('click', () => window.print());
+document.getElementById('btn-download-receipt').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-download-receipt');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generando…';
+  try {
+    const area = document.getElementById('receipt-print-area');
+    const canvas = await html2canvas(area, { backgroundColor: '#0a0a0a', scale: 2 });
+    const dataUrl = canvas.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = `spotclub_recibo_${currentReceiptFolio || 'venta'}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } catch (err) {
+    console.error(err);
+    showToast('No se pudo generar el PNG del recibo.', 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = original;
+});
 
 /* ---------- Eliminar venta (restituye stock) ---------- */
 async function deleteSale(saleId) {
@@ -2086,18 +2782,25 @@ async function deleteSale(saleId) {
     const saleSnap = await transaction.get(saleRef);
     if (!saleSnap.exists()) throw new Error('La venta ya no existe.');
     const items = saleSnap.data().items || [];
-    const stockItems = items.filter((it) => !it.porPedido && it.productId);
+    const stockDeltas = groupStockDeltas(items);
+    const stockProductIds = Object.keys(stockDeltas);
 
-    const productRefs = stockItems.map((it) => fb.doc(db, 'products', it.productId));
+    const productRefs = stockProductIds.map((id) => fb.doc(db, 'products', id));
     const productDocs = await Promise.all(productRefs.map((ref) => transaction.get(ref)));
 
     productDocs.forEach((docSnap, idx) => {
       if (!docSnap.exists()) return; // el producto ya no existe: no hay dónde restituir stock
-      const it = stockItems[idx];
+      const productId = stockProductIds[idx];
+      const delta = stockDeltas[productId];
       const ref = productRefs[idx];
       const data = docSnap.data();
-      const newTallas = { ...data.tallas, [it.talla]: ((data.tallas && data.tallas[it.talla]) || 0) + it.cantidad };
-      transaction.update(ref, { tallas: newTallas });
+      if (data.manejaTallas === false) {
+        transaction.update(ref, { stockUnico: (Number(data.stockUnico) || 0) + delta.total });
+      } else {
+        const newTallas = { ...data.tallas };
+        Object.keys(delta.porTalla).forEach((talla) => { newTallas[talla] = ((newTallas[talla]) || 0) + delta.porTalla[talla]; });
+        transaction.update(ref, { tallas: newTallas });
+      }
     });
 
     transaction.delete(saleRef);
@@ -2114,9 +2817,11 @@ function openEditSaleModal(sale) {
   const cliente = sale.cliente || {};
   document.getElementById('edit-sale-cliente-nombre').value = cliente.nombre || '';
   document.getElementById('edit-sale-cliente-cedula').value = cliente.cedula || '';
+  document.getElementById('edit-sale-cliente-telefono').value = cliente.telefono || '';
   document.getElementById('edit-sale-cliente-estado').value = cliente.estado || '';
   document.getElementById('edit-sale-cliente-pais').value = cliente.pais || '';
   document.getElementById('edit-sale-cliente-agencia').value = cliente.agenciaEnvio || '';
+  document.getElementById('edit-sale-monto-abonado').value = (sale.montoAbonado ?? sale.total ?? 0).toFixed(2);
   renderEditSaleItems();
   document.getElementById('edit-sale-modal').hidden = false;
 }
@@ -2139,7 +2844,7 @@ function renderEditSaleItems() {
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0">
             <p class="text-sm font-medium truncate">${escapeHtml(it.nombre)} <span class="text-silver text-xs">(${it.talla})</span></p>
-            <p class="text-[11px] text-silver">${it.disenoTamano ? `Diseño ${it.disenoTamano}cm (+${fmtMoney(it.disenoPrecio)}) · ` : ''}Presentación +${fmtMoney(it.presentacionUnit || 0)}${it.porPedido ? ' · Pedido' : ''}</p>
+            <p class="text-[11px] text-silver">${it.disenoTamano ? `Diseño ${it.disenoTamano} (+${fmtMoney(it.disenoPrecio)}) · ` : ''}Presentación +${fmtMoney(it.presentacionUnit || 0)}${it.porPedido ? ' · Pedido' : ''}</p>
           </div>
           <button type="button" data-edit-remove="${i}" class="text-zinc-500 hover:text-red-400 transition-colors shrink-0">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -2186,28 +2891,41 @@ function updateEditSaleRow(i) {
 function updateEditSaleTotal() {
   const total = editingSaleItems.reduce((a, it) => a + it.cantidad * itemFinalPrice(it), 0);
   document.getElementById('edit-sale-total').textContent = fmtMoney(total);
+  updateEditSalePagoUI();
 }
+// Recalcula el badge de estado de pago y el saldo pendiente en el modal de edición,
+// en base al total actual de la venta (que puede cambiar si se editan cantidades/precios).
+function updateEditSalePagoUI() {
+  const total = editingSaleItems.reduce((a, it) => a + it.cantidad * itemFinalPrice(it), 0);
+  const input = document.getElementById('edit-sale-monto-abonado');
+  const abonado = Math.max(0, Math.min(parseMoneyInput(input.value), total));
+  const estado = computeEstadoPago(abonado, total);
+  document.getElementById('edit-sale-estado-pago-badge').innerHTML = estadoPagoBadgeHtml({ estadoPago: estado });
+  document.getElementById('edit-sale-saldo').textContent = `Saldo pendiente: ${fmtMoney(Math.max(0, total - abonado))}`;
+}
+document.getElementById('edit-sale-monto-abonado').addEventListener('input', updateEditSalePagoUI);
+document.getElementById('edit-sale-marcar-pagado').addEventListener('click', () => {
+  const total = editingSaleItems.reduce((a, it) => a + it.cantidad * itemFinalPrice(it), 0);
+  document.getElementById('edit-sale-monto-abonado').value = total.toFixed(2);
+  updateEditSalePagoUI();
+});
+document.getElementById('edit-sale-marcar-no-pagado').addEventListener('click', () => {
+  document.getElementById('edit-sale-monto-abonado').value = '0.00';
+  updateEditSalePagoUI();
+});
 document.getElementById('close-edit-sale-modal').addEventListener('click', closeEditSaleModal);
 document.getElementById('cancel-edit-sale').addEventListener('click', closeEditSaleModal);
 document.getElementById('edit-sale-modal').addEventListener('click', (e) => {
   if (e.target.id === 'edit-sale-modal') closeEditSaleModal();
 });
 
-async function guardarEdicionVenta(saleId, originalItems, newItems, metodoPago, cliente) {
+async function guardarEdicionVenta(saleId, originalItems, newItems, metodoPago, cliente, montoAbonado) {
   const saleRef = fb.doc(db, 'sales', saleId);
 
-  // Sumar cantidades por producto+talla (solo ítems de inventario real, no "por pedido")
-  const sumByProductTalla = (items) => {
-    const map = {};
-    items.filter((it) => !it.porPedido && it.productId).forEach((it) => {
-      const key = it.productId + '|' + it.talla;
-      map[key] = (map[key] || 0) + it.cantidad;
-    });
-    return map;
-  };
-  const originalMap = sumByProductTalla(originalItems);
-  const newMap = sumByProductTalla(newItems);
-  const productIds = [...new Set([...originalItems, ...newItems].filter((it) => !it.porPedido && it.productId).map((it) => it.productId))];
+  // Cantidades por producto (y por talla) antes y después de la edición (solo ítems de inventario real).
+  const originalDeltas = groupStockDeltas(originalItems);
+  const newDeltas = groupStockDeltas(newItems);
+  const productIds = [...new Set([...Object.keys(originalDeltas), ...Object.keys(newDeltas)])];
 
   await fb.runTransaction(db, async (transaction) => {
     const productRefs = productIds.map((id) => fb.doc(db, 'products', id));
@@ -2219,30 +2937,36 @@ async function guardarEdicionVenta(saleId, originalItems, newItems, metodoPago, 
       const ref = productRefs[idx];
       if (!docSnap.exists()) throw new Error('Uno de los productos de esta venta ya no existe en el catálogo.');
       const data = docSnap.data();
-      const newTallas = { ...(data.tallas || {}) };
-      // Restituir cantidades originales de este producto, luego descontar las nuevas
-      Object.keys(originalMap).forEach((key) => {
-        const [pid, talla] = key.split('|');
-        if (pid === productId) newTallas[talla] = (newTallas[talla] || 0) + originalMap[key];
-      });
-      Object.keys(newMap).forEach((key) => {
-        const [pid, talla] = key.split('|');
-        if (pid === productId) newTallas[talla] = (newTallas[talla] || 0) - newMap[key];
-      });
-      Object.keys(newTallas).forEach((talla) => {
-        if (newTallas[talla] < 0) throw new Error(`Stock insuficiente para completar la edición (talla ${talla}).`);
-      });
-      updates.push({ ref, newTallas });
+      const original = originalDeltas[productId] || { porTalla: {}, total: 0 };
+      const nuevo = newDeltas[productId] || { porTalla: {}, total: 0 };
+
+      if (data.manejaTallas === false) {
+        const newStock = (Number(data.stockUnico) || 0) + original.total - nuevo.total;
+        if (newStock < 0) throw new Error(`Stock insuficiente para completar la edición (${data.nombre || 'producto'}).`);
+        updates.push({ ref, stockUnico: newStock });
+      } else {
+        const newTallas = { ...(data.tallas || {}) };
+        // Restituir cantidades originales de este producto, luego descontar las nuevas
+        Object.keys(original.porTalla).forEach((talla) => { newTallas[talla] = (newTallas[talla] || 0) + original.porTalla[talla]; });
+        Object.keys(nuevo.porTalla).forEach((talla) => { newTallas[talla] = (newTallas[talla] || 0) - nuevo.porTalla[talla]; });
+        Object.keys(newTallas).forEach((talla) => {
+          if (newTallas[talla] < 0) throw new Error(`Stock insuficiente para completar la edición (talla ${talla}).`);
+        });
+        updates.push({ ref, newTallas });
+      }
     });
 
-    updates.forEach(({ ref, newTallas }) => transaction.update(ref, { tallas: newTallas }));
+    updates.forEach((u) => transaction.update(u.ref, u.newTallas ? { tallas: u.newTallas } : { stockUnico: u.stockUnico }));
 
     const total = newItems.reduce((a, it) => a + it.cantidad * itemFinalPrice(it), 0);
     const totalCosto = newItems.reduce((a, it) => a + (Number(it.costoUnitario) || 0) * it.cantidad, 0);
     const cantidadPrendas = newItems.reduce((a, it) => a + it.cantidad, 0);
     const presentacionTotal = newItems.reduce((a, it) => a + (Number(it.presentacionUnit) || 0) * it.cantidad, 0);
+    const totalDisenoCosto = newItems.reduce((a, it) => a + (Number(it.disenoCosto) || 0) * it.cantidad, 0);
     const tienePedido = newItems.some((it) => it.porPedido);
     const itemsToSave = newItems.map((it) => ({ ...it, subtotal: it.cantidad * itemFinalPrice(it) }));
+    const montoAbonadoFinal = Math.max(0, Math.min(Number(montoAbonado) || 0, total));
+    const estadoPago = computeEstadoPago(montoAbonadoFinal, total);
 
     transaction.update(saleRef, {
       items: itemsToSave,
@@ -2253,7 +2977,10 @@ async function guardarEdicionVenta(saleId, originalItems, newItems, metodoPago, 
       gananciaNeta: total - totalCosto,
       cantidadPrendas,
       presentacionTotal,
+      totalDisenoCosto,
       tienePedido,
+      montoAbonado: montoAbonadoFinal,
+      estadoPago,
       editadoAt: fb.serverTimestamp(),
     });
   });
@@ -2267,18 +2994,20 @@ document.getElementById('edit-sale-form').addEventListener('submit', async (e) =
   const cliente = {
     nombre: document.getElementById('edit-sale-cliente-nombre').value.trim(),
     cedula: document.getElementById('edit-sale-cliente-cedula').value.trim(),
+    telefono: document.getElementById('edit-sale-cliente-telefono').value.trim(),
     estado: document.getElementById('edit-sale-cliente-estado').value.trim(),
     pais: document.getElementById('edit-sale-cliente-pais').value.trim(),
     agenciaEnvio: document.getElementById('edit-sale-cliente-agencia').value.trim(),
   };
-  if (!cliente.nombre || !cliente.cedula || !cliente.estado || !cliente.pais || !cliente.agenciaEnvio) {
-    showToast('Completa los datos del cliente (nombre, cédula, estado, país y agencia de envío).', 'error');
+  if (!cliente.nombre || !cliente.cedula || !cliente.telefono || !cliente.estado || !cliente.pais || !cliente.agenciaEnvio) {
+    showToast('Completa los datos del cliente (nombre, cédula, teléfono, estado, país y agencia de envío).', 'error');
     return;
   }
+  const montoAbonado = parseMoneyInput(document.getElementById('edit-sale-monto-abonado').value);
   const submitBtn = e.target.querySelector('button[type="submit"]');
   submitBtn.disabled = true;
   try {
-    await guardarEdicionVenta(editingSaleId, editingSaleOriginalItems, editingSaleItems, metodoPago, cliente);
+    await guardarEdicionVenta(editingSaleId, editingSaleOriginalItems, editingSaleItems, metodoPago, cliente, montoAbonado);
     showToast('Venta actualizada correctamente.');
     closeEditSaleModal();
   } catch (err) {
@@ -2286,6 +3015,111 @@ document.getElementById('edit-sale-form').addEventListener('submit', async (e) =
     showToast(err.message || 'Error al editar la venta.', 'error');
   }
   submitBtn.disabled = false;
+});
+
+/* ---------- Resumen de Pedidos Pendientes (qué comprar al proveedor) ---------- */
+// Lista plana de { sale, itemIndex, item } de todos los ítems "por pedido" que aún no se han
+// marcado como comprados/surtidos con el proveedor.
+function getPendingPedidoRows() {
+  const rows = [];
+  sales.forEach((sale) => {
+    (sale.items || []).forEach((item, itemIndex) => {
+      if (item.porPedido && !item.comprado) rows.push({ sale, itemIndex, item });
+    });
+  });
+  return rows;
+}
+function updatePedidosPendientesBadge() {
+  const badge = document.getElementById('pedidos-pendientes-count');
+  if (!badge) return;
+  const count = getPendingPedidoRows().reduce((a, r) => a + (Number(r.item.cantidad) || 0), 0);
+  badge.hidden = count === 0;
+  badge.textContent = count;
+}
+function renderPedidosPendientesModal() {
+  const rows = getPendingPedidoRows();
+
+  // Totales agrupados por producto + talla + diseño: "qué comprar".
+  const totales = {};
+  rows.forEach(({ item }) => {
+    const key = [item.nombre, item.talla, item.disenoTamano || ''].join('|');
+    if (!totales[key]) totales[key] = { nombre: item.nombre, talla: item.talla, disenoTamano: item.disenoTamano, cantidad: 0 };
+    totales[key].cantidad += Number(item.cantidad) || 0;
+  });
+  const totalesArr = Object.values(totales).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const totalesWrap = document.getElementById('pedidos-resumen-totales');
+  totalesWrap.innerHTML = totalesArr.length === 0
+    ? '<p class="text-zinc-600 text-sm py-4">No hay pedidos pendientes por comprar.</p>'
+    : totalesArr.map((t) => `
+      <span class="text-xs px-3 py-2 rounded-lg bg-black/40 border border-line">
+        <span class="font-semibold">${t.cantidad}×</span> ${escapeHtml(t.nombre)} <span class="text-silver">(${escapeHtml(t.talla)}${t.disenoTamano ? ` · Diseño ${t.disenoTamano}` : ''})</span>
+      </span>`).join('');
+
+  // Detalle por venta, con checkbox individual para marcar "ya comprado".
+  const detalleWrap = document.getElementById('pedidos-detalle-list');
+  detalleWrap.innerHTML = rows.length === 0
+    ? '<p class="text-zinc-600 text-sm text-center py-6">Todo al día.</p>'
+    : rows.map(({ sale, itemIndex, item }) => `
+      <label class="flex items-start gap-3 bg-black/30 rounded-lg px-3 py-2.5 border border-line cursor-pointer select-none">
+        <input type="checkbox" data-comprado-sale="${sale.id}" data-comprado-idx="${itemIndex}" class="accent-white w-4 h-4 mt-0.5" />
+        <span class="flex-1 min-w-0">
+          <span class="block text-sm font-medium truncate">${escapeHtml(item.nombre)} <span class="text-silver text-xs">(${escapeHtml(item.talla)})</span> x${item.cantidad}${item.disenoTamano ? ` · Diseño ${item.disenoTamano}` : ''}</span>
+          <span class="block text-[11px] text-zinc-500">Folio ${sale.id.slice(0, 8).toUpperCase()} · Cliente: ${escapeHtml((sale.cliente || {}).nombre || '—')}</span>
+        </span>
+      </label>`).join('');
+  detalleWrap.querySelectorAll('[data-comprado-sale]').forEach((input) => input.addEventListener('change', async () => {
+    if (!input.checked) return; // solo se marca hacia "comprado"; no hay vuelta atrás desde aquí
+    input.disabled = true;
+    try {
+      await marcarPedidoComprado(input.dataset.compradoSale, Number(input.dataset.compradoIdx));
+    } catch (err) {
+      console.error(err);
+      showToast('Error al marcar el pedido como comprado.', 'error');
+      input.checked = false;
+      input.disabled = false;
+    }
+  }));
+}
+async function marcarPedidoComprado(saleId, itemIndex) {
+  const sale = sales.find((s) => s.id === saleId);
+  if (!sale) throw new Error('La venta ya no existe.');
+  const newItems = JSON.parse(JSON.stringify(sale.items || []));
+  if (!newItems[itemIndex]) throw new Error('El ítem ya no existe.');
+  newItems[itemIndex].comprado = true;
+  await fb.updateDoc(fb.doc(db, 'sales', saleId), { items: newItems });
+  showToast(`${newItems[itemIndex].nombre} marcado como comprado.`);
+  renderPedidosPendientesModal();
+}
+document.getElementById('btn-ver-pedidos-pendientes').addEventListener('click', () => {
+  renderPedidosPendientesModal();
+  document.getElementById('pedidos-pendientes-modal').hidden = false;
+});
+document.getElementById('close-pedidos-pendientes-modal').addEventListener('click', () => {
+  document.getElementById('pedidos-pendientes-modal').hidden = true;
+});
+document.getElementById('pedidos-pendientes-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'pedidos-pendientes-modal') document.getElementById('pedidos-pendientes-modal').hidden = true;
+});
+document.getElementById('btn-copiar-pedidos').addEventListener('click', async () => {
+  const rows = getPendingPedidoRows();
+  if (rows.length === 0) { showToast('No hay pedidos pendientes para copiar.', 'error'); return; }
+  const totales = {};
+  rows.forEach(({ item }) => {
+    const key = [item.nombre, item.talla, item.disenoTamano || ''].join('|');
+    if (!totales[key]) totales[key] = { nombre: item.nombre, talla: item.talla, disenoTamano: item.disenoTamano, cantidad: 0 };
+    totales[key].cantidad += Number(item.cantidad) || 0;
+  });
+  const texto = Object.values(totales)
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    .map((t) => `${t.cantidad}x ${t.nombre} (${t.talla}${t.disenoTamano ? ` · Diseño ${t.disenoTamano}` : ''})`)
+    .join('\n');
+  try {
+    await navigator.clipboard.writeText(texto);
+    showToast('Resumen copiado al portapapeles.');
+  } catch (err) {
+    console.error(err);
+    showToast('No se pudo copiar. Revisa los permisos del navegador.', 'error');
+  }
 });
 
 /* ============================================================
@@ -2332,6 +3166,15 @@ function renderDashboard() {
   document.getElementById('kpi-prendas').textContent = prendas;
   document.getElementById('kpi-ticket').textContent = fmtMoney(ticket);
 
+  // Costos / Reinversión: cuánto reponer en mercancía + presentación + impresión de diseños.
+  const costoMercancia = filtered.reduce((a, s) => a + (s.totalCosto || 0), 0);
+  const costoPresentacion = filtered.reduce((a, s) => a + (s.presentacionTotal || 0), 0);
+  const costoDisenos = filtered.reduce((a, s) => a + (s.totalDisenoCosto ?? (s.items || []).reduce((b, it) => b + (Number(it.disenoCosto) || 0) * it.cantidad, 0)), 0);
+  document.getElementById('kpi-costo-mercancia').textContent = fmtMoney(costoMercancia);
+  document.getElementById('kpi-costo-presentacion').textContent = fmtMoney(costoPresentacion);
+  document.getElementById('kpi-costo-disenos').textContent = fmtMoney(costoDisenos);
+  document.getElementById('kpi-total-reponer').textContent = fmtMoney(costoMercancia + costoPresentacion + costoDisenos);
+
   const breakdown = {};
   PAYMENT_METHODS.forEach((m) => breakdown[m] = 0);
   filtered.forEach((s) => { breakdown[s.metodoPago] = (breakdown[s.metodoPago] || 0) + (s.total || 0); });
@@ -2347,7 +3190,7 @@ function renderDashboard() {
     tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-zinc-600 text-sm">No hay ventas en este periodo.</td></tr>';
   } else {
     tbody.innerHTML = filtered.map((s) => {
-      const detalle = (s.items || []).map((it) => `${it.nombre} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` +Diseño ${it.disenoTamano}cm` : ''}${it.porPedido ? ' [Pedido]' : ''}`).join(', ');
+      const detalle = (s.items || []).map((it) => `${it.nombre} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` +Diseño ${it.disenoTamano}` : ''}${it.porPedido ? ' [Pedido]' : ''}`).join(', ');
       const tienePedido = s.tienePedido ?? (s.items || []).some((it) => it.porPedido);
       return `
         <tr class="border-b border-line/60">
@@ -2357,6 +3200,7 @@ function renderDashboard() {
             <div class="flex items-center gap-1.5">
               <span class="truncate" title="${escapeHtml(detalle)}">${escapeHtml(detalle)}</span>
               ${tienePedido ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+              ${estadoPagoBadgeHtml(s)}
             </div>
           </td>
           <td class="px-6 py-3 whitespace-nowrap text-silver">${escapeHtml(s.metodoPago)}</td>
@@ -2404,7 +3248,7 @@ function renderHistorial2() {
     if (start && s.fecha < start) return false;
     if (search) {
       const c = s.cliente || {};
-      const text = [(s.items || []).map((it) => it.nombre).join(' '), c.nombre, c.cedula, c.estado, c.pais, c.agenciaEnvio].filter(Boolean).join(' ').toLowerCase();
+      const text = [(s.items || []).map((it) => it.nombre).join(' '), c.nombre, c.cedula, c.telefono, c.estado, c.pais, c.agenciaEnvio].filter(Boolean).join(' ').toLowerCase();
       if (!text.includes(search)) return false;
     }
     return true;
@@ -2421,9 +3265,10 @@ function renderHistorial2() {
     return `
     <tr class="border-b border-line/60">
       <td class="px-6 py-3 font-mono text-xs text-silver">
-        <div class="flex items-center gap-1.5">
+        <div class="flex items-center gap-1.5 flex-wrap">
           <span>${s.id.slice(0, 8).toUpperCase()}</span>
           ${tienePedido ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+          ${estadoPagoBadgeHtml(s)}
         </div>
       </td>
       <td class="px-6 py-3 whitespace-nowrap">${fmtDate(s.fecha)} · ${fmtTime(s.fecha)}</td>
@@ -2461,18 +3306,23 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
   const filtered = getFilteredSales();
   if (filtered.length === 0) { showToast('No hay ventas para exportar en este periodo.', 'error'); return; }
 
-  const rows = [['Fecha', 'Hora', 'Folio', 'Cliente', 'Cédula', 'Estado', 'País', 'Agencia de Envío', 'Prenda', 'Categoría', 'Material', 'Talla', 'Cantidad', 'Precio Unitario', 'Diseño', 'Precio Diseño', 'Presentación (unit.)', 'Presentación (subtotal)', 'Subtotal', 'Método de Pago', 'Total Venta', 'Tipo']];
+  const rows = [['Fecha', 'Hora', 'Folio', 'Cliente', 'Cédula', 'Teléfono', 'Estado', 'País', 'Agencia de Envío', 'Prenda', 'Categoría', 'Material', 'Talla', 'Cantidad', 'Precio Unitario', 'Costo Unitario', 'Diseño', 'Precio Diseño', 'Costo Diseño', 'Presentación (unit.)', 'Presentación (subtotal)', 'Subtotal', 'Método de Pago', 'Total Venta', 'Estado de Pago', 'Monto Abonado', 'Saldo Pendiente', 'Tipo']];
   filtered.forEach((s) => {
     const c = s.cliente || {};
+    const estadoPagoLbl = ESTADO_PAGO_LABEL[s.estadoPago] || ESTADO_PAGO_LABEL.completo;
+    const montoAbonado = s.montoAbonado ?? s.total;
+    const saldoPendiente = Math.max(0, (s.total || 0) - montoAbonado);
     (s.items || []).forEach((it) => {
       const presentacionUnit = Number(it.presentacionUnit) || 0;
       rows.push([
         fmtDate(s.fecha), fmtTime(s.fecha), s.id.slice(0, 8).toUpperCase(),
-        c.nombre || '', c.cedula || '', c.estado || '', c.pais || '', c.agenciaEnvio || '',
+        c.nombre || '', c.cedula || '', c.telefono || '', c.estado || '', c.pais || '', c.agenciaEnvio || '',
         it.nombre, it.categoria, it.material, it.talla, it.cantidad,
-        it.precioUnitario.toFixed(2), it.disenoTamano || '—', (Number(it.disenoPrecio) || 0).toFixed(2),
+        it.precioUnitario.toFixed(2), (Number(it.costoUnitario) || 0).toFixed(2),
+        it.disenoTamano || '—', (Number(it.disenoPrecio) || 0).toFixed(2), (Number(it.disenoCosto) || 0).toFixed(2),
         presentacionUnit.toFixed(2), (presentacionUnit * it.cantidad).toFixed(2),
         it.subtotal.toFixed(2), s.metodoPago, s.total.toFixed(2),
+        estadoPagoLbl, montoAbonado.toFixed(2), saldoPendiente.toFixed(2),
         it.porPedido ? 'Por Pedido' : 'Inventario',
       ]);
     });
@@ -2506,10 +3356,29 @@ function fmtByCuenta(n, cuenta) {
     : 'Bs ' + val.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Suma el saldo de una cuenta ('bs' o 'binance') directamente a partir de los movimientos que
+// existen ahora mismo en memoria (reflejo en vivo de Firestore). Nunca se guarda como un total
+// aparte, así el saldo mostrado siempre coincide exactamente con los movimientos reales — si
+// borras o editas uno, el saldo se recalcula solo y nunca queda "contando" un registro fantasma.
+function computeSaldo(cuenta) {
+  let saldo = 0;
+  movimientos.forEach((m) => {
+    if (m.tipo === 'conversion') {
+      if (m.cuentaOrigen === cuenta) saldo -= Number(m.montoOrigen) || 0;
+      if (m.cuentaDestino === cuenta) saldo += Number(m.montoDestino) || 0;
+    } else if (m.cuenta === cuenta) {
+      saldo += m.tipo === 'gasto' ? -Math.abs(Number(m.monto) || 0) : Math.abs(Number(m.monto) || 0);
+    }
+  });
+  return saldo;
+}
+
 function renderAccountBalances() {
   const bsEl = document.getElementById('saldo-bs');
   const usdtEl = document.getElementById('saldo-binance');
   if (!bsEl || !usdtEl) return;
+  accounts.bs = computeSaldo('bs');
+  accounts.binance = computeSaldo('binance');
   bsEl.textContent = fmtByCuenta(accounts.bs, 'bs');
   bsEl.classList.toggle('text-red-400', (accounts.bs || 0) < 0);
   usdtEl.textContent = fmtByCuenta(accounts.binance, 'binance');
@@ -2581,78 +3450,31 @@ document.getElementById('mov-filter-cuenta').addEventListener('change', renderMo
 document.getElementById('mov-filter-tipo').addEventListener('change', renderMovimientos);
 
 /* ---------- Transacción: escribe el saldo y el movimiento juntos ---------- */
+// El saldo YA NO se guarda como un total aparte (eso era lo que podía desincronizarse si un
+// movimiento se borraba o editaba por fuera de la app). Estas funciones solo crean/editan/borran
+// el registro del movimiento; el saldo siempre se recalcula en vivo con computeSaldo().
 async function registrarMovimiento({ tipo, cuenta, monto, cuentaOrigen, cuentaDestino, montoOrigen, montoDestino, motivo }) {
-  const movRef = fb.doc(fb.collection(db, 'movimientos'));
-  await fb.runTransaction(db, async (transaction) => {
-    if (tipo === 'conversion') {
-      const origRef = fb.doc(db, 'accounts', cuentaOrigen);
-      const destRef = fb.doc(db, 'accounts', cuentaDestino);
-      const [origSnap, destSnap] = await Promise.all([transaction.get(origRef), transaction.get(destRef)]);
-      const origSaldo = origSnap.exists() ? (origSnap.data().saldo || 0) : 0;
-      const destSaldo = destSnap.exists() ? (destSnap.data().saldo || 0) : 0;
-      transaction.set(origRef, { saldo: origSaldo - montoOrigen, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.set(destRef, { saldo: destSaldo + montoDestino, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.set(movRef, { tipo, cuentaOrigen, cuentaDestino, montoOrigen, montoDestino, motivo: motivo || '', fecha: fb.serverTimestamp() });
-    } else {
-      const ref = fb.doc(db, 'accounts', cuenta);
-      const snap = await transaction.get(ref);
-      const saldo = snap.exists() ? (snap.data().saldo || 0) : 0;
-      const delta = tipo === 'gasto' ? -Math.abs(monto) : Math.abs(monto);
-      transaction.set(ref, { saldo: saldo + delta, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.set(movRef, { tipo, cuenta, monto: Math.abs(monto), motivo: motivo || '', fecha: fb.serverTimestamp() });
-    }
-  });
+  if (tipo === 'conversion') {
+    await fb.addDoc(fb.collection(db, 'movimientos'), { tipo, cuentaOrigen, cuentaDestino, montoOrigen, montoDestino, motivo: motivo || '', fecha: fb.serverTimestamp() });
+  } else {
+    await fb.addDoc(fb.collection(db, 'movimientos'), { tipo, cuenta, monto: Math.abs(monto), motivo: motivo || '', fecha: fb.serverTimestamp() });
+  }
 }
 
-/* ---------- Editar / Eliminar movimiento (revierte y reaplica el efecto en el saldo) ---------- */
+/* ---------- Editar / Eliminar movimiento ---------- */
 async function editarMovimiento(mov, cambios) {
   const movRef = fb.doc(db, 'movimientos', mov.id);
-  await fb.runTransaction(db, async (transaction) => {
-    if (mov.tipo === 'conversion') {
-      const origRef = fb.doc(db, 'accounts', mov.cuentaOrigen);
-      const destRef = fb.doc(db, 'accounts', mov.cuentaDestino);
-      const [origSnap, destSnap] = await Promise.all([transaction.get(origRef), transaction.get(destRef)]);
-      const origSaldo = origSnap.exists() ? (origSnap.data().saldo || 0) : 0;
-      const destSaldo = destSnap.exists() ? (destSnap.data().saldo || 0) : 0;
-      // Revierte el efecto original de la conversión y aplica el nuevo.
-      transaction.set(origRef, { saldo: origSaldo + mov.montoOrigen - cambios.montoOrigen, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.set(destRef, { saldo: destSaldo - mov.montoDestino + cambios.montoDestino, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.update(movRef, { montoOrigen: cambios.montoOrigen, montoDestino: cambios.montoDestino, motivo: cambios.motivo || '', editadoAt: fb.serverTimestamp() });
-    } else {
-      const ref = fb.doc(db, 'accounts', mov.cuenta);
-      const snap = await transaction.get(ref);
-      const saldo = snap.exists() ? (snap.data().saldo || 0) : 0;
-      const oldDelta = mov.tipo === 'gasto' ? -Math.abs(mov.monto) : Math.abs(mov.monto);
-      const newDelta = mov.tipo === 'gasto' ? -Math.abs(cambios.monto) : Math.abs(cambios.monto);
-      transaction.set(ref, { saldo: saldo - oldDelta + newDelta, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.update(movRef, { monto: Math.abs(cambios.monto), motivo: cambios.motivo || '', editadoAt: fb.serverTimestamp() });
-    }
-  });
+  if (mov.tipo === 'conversion') {
+    await fb.updateDoc(movRef, { montoOrigen: cambios.montoOrigen, montoDestino: cambios.montoDestino, motivo: cambios.motivo || '', editadoAt: fb.serverTimestamp() });
+  } else {
+    await fb.updateDoc(movRef, { monto: Math.abs(cambios.monto), motivo: cambios.motivo || '', editadoAt: fb.serverTimestamp() });
+  }
 }
 
 async function eliminarMovimiento(id) {
   const mov = movimientos.find((m) => m.id === id);
   if (!mov) throw new Error('El movimiento ya no existe.');
-  const movRef = fb.doc(db, 'movimientos', id);
-  await fb.runTransaction(db, async (transaction) => {
-    if (mov.tipo === 'conversion') {
-      const origRef = fb.doc(db, 'accounts', mov.cuentaOrigen);
-      const destRef = fb.doc(db, 'accounts', mov.cuentaDestino);
-      const [origSnap, destSnap] = await Promise.all([transaction.get(origRef), transaction.get(destRef)]);
-      const origSaldo = origSnap.exists() ? (origSnap.data().saldo || 0) : 0;
-      const destSaldo = destSnap.exists() ? (destSnap.data().saldo || 0) : 0;
-      transaction.set(origRef, { saldo: origSaldo + mov.montoOrigen, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.set(destRef, { saldo: destSaldo - mov.montoDestino, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.delete(movRef);
-    } else {
-      const ref = fb.doc(db, 'accounts', mov.cuenta);
-      const snap = await transaction.get(ref);
-      const saldo = snap.exists() ? (snap.data().saldo || 0) : 0;
-      const delta = mov.tipo === 'gasto' ? -Math.abs(mov.monto) : Math.abs(mov.monto);
-      transaction.set(ref, { saldo: saldo - delta, updatedAt: fb.serverTimestamp() }, { merge: true });
-      transaction.delete(movRef);
-    }
-  });
+  await fb.deleteDoc(fb.doc(db, 'movimientos', id));
 }
 
 /* ---------- Modal: Ingreso / Gasto ---------- */
@@ -2949,6 +3771,11 @@ renderDashboard();
 renderAccountBalances();
 renderMovimientos();
 renderDesignPricesForm();
+renderFacturacionForm();
+renderCategoriasTallaForm();
+renderFondoInversionForm();
+renderReservaUsdt();
+populateFilterOptions();
 refreshPosDisenoOptions();
 initFirebase();
 </script>
