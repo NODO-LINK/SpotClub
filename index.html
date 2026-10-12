@@ -624,15 +624,21 @@
         <div class="lg:col-span-3 glass rounded-2xl p-6 space-y-4 anim-slide-up">
           <div class="flex items-center justify-between flex-wrap gap-3">
             <h3 class="font-semibold tracking-wide">Agregar Prenda a la Venta</h3>
-            <div class="flex bg-black/40 rounded-lg p-1 gap-1 text-xs">
+            <div class="flex bg-black/40 rounded-lg p-1 gap-1 text-xs flex-wrap">
               <button type="button" data-mode="inventario" class="pos-mode-btn active px-3 py-1.5 rounded-md font-medium">Desde Inventario</button>
               <button type="button" data-mode="pedido" class="pos-mode-btn px-3 py-1.5 rounded-md font-medium">Por Pedido (Sin Stock)</button>
+              <button type="button" data-mode="libre" class="pos-mode-btn px-3 py-1.5 rounded-md font-medium">Venta Libre</button>
             </div>
           </div>
 
           <div id="pedido-banner" hidden class="flex items-start gap-2 bg-amber-950/20 border border-amber-800/60 text-amber-400 text-xs rounded-lg px-3 py-2.5 anim-slide-down">
             <svg class="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.14A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
             <span>Venta sobre pedido: se factura y se registra en caja sin descontar existencias. Úsala para prendas que encargas al proveedor después de recibir el pago.</span>
+          </div>
+
+          <div id="libre-banner" hidden class="flex items-start gap-2 bg-sky-950/20 border border-sky-800/60 text-sky-400 text-xs rounded-lg px-3 py-2.5 anim-slide-down">
+            <svg class="w-4 h-4 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.29 3.86l-8.18 14.14A2 2 0 0 0 3.82 21h16.36a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+            <span>Venta libre: para cualquier cosa fuera del catálogo que se vende y cobra de una vez (no descuenta stock y no queda pendiente de comprar al proveedor, a diferencia de "Por Pedido").</span>
           </div>
 
           <label id="custom-item-toggle-wrap" hidden class="flex items-center gap-2 text-sm text-silver cursor-pointer select-none">
@@ -2331,14 +2337,15 @@ function setPosMode(mode) {
   posMode = mode;
   document.querySelectorAll('.pos-mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
   document.getElementById('pedido-banner').hidden = mode !== 'pedido';
+  document.getElementById('libre-banner').hidden = mode !== 'libre';
   document.getElementById('custom-item-toggle-wrap').hidden = mode !== 'pedido';
-  document.getElementById('pos-costo-wrap').hidden = mode !== 'pedido';
-  document.getElementById('pos-talla-label').textContent = mode === 'pedido' ? 'Talla' : 'Talla / Stock disponible';
+  document.getElementById('pos-costo-wrap').hidden = mode === 'inventario';
+  document.getElementById('pos-talla-label').textContent = mode === 'inventario' ? 'Talla / Stock disponible' : (mode === 'libre' ? 'Talla (si aplica)' : 'Talla');
 
   posCustomItem = false;
   document.getElementById('pos-custom-toggle').checked = false;
-  document.getElementById('pos-custom-fields').hidden = true;
-  document.getElementById('pos-catalog-fields').hidden = false;
+  document.getElementById('pos-custom-fields').hidden = mode !== 'libre';
+  document.getElementById('pos-catalog-fields').hidden = mode === 'libre';
   document.getElementById('pos-product').value = '';
   document.getElementById('pos-custom-nombre').value = '';
   document.getElementById('pos-custom-categoria').value = '';
@@ -2367,7 +2374,7 @@ document.getElementById('pos-custom-toggle').addEventListener('change', (e) => {
 function renderPOSProductOptions() {
   const sel = document.getElementById('pos-product');
   const cur = sel.value;
-  const available = posMode === 'pedido' ? products : products.filter((p) => totalStock(p) > 0);
+  const available = posMode === 'inventario' ? products.filter((p) => totalStock(p) > 0) : products;
   sel.innerHTML = '<option value="">Selecciona una prenda…</option>' +
     available.map((p) => `<option value="${p.id}">${escapeHtml(p.nombre)} — ${escapeHtml(p.material)}</option>`).join('');
   sel.value = available.some((p) => p.id === cur) ? cur : '';
@@ -2381,6 +2388,22 @@ function resetPOSSelectors() {
   if (posMode === 'pedido' && posCustomItem) {
     // Producto personalizado: todos los campos quedan listos para escribir, sin depender de stock.
     tallaSel.innerHTML = SIZES.map((s) => `<option value="${s}">${s}</option>`).join('');
+    tallaSel.disabled = false;
+    document.getElementById('pos-cantidad').disabled = false;
+    document.getElementById('pos-cantidad').value = 1;
+    document.getElementById('pos-cantidad').removeAttribute('max');
+    document.getElementById('pos-precio').disabled = false;
+    document.getElementById('pos-precio').value = '';
+    document.getElementById('pos-costo').disabled = false;
+    document.getElementById('pos-costo').value = '';
+    document.getElementById('btn-add-cart').disabled = false;
+    setDisenoVisible(document.getElementById('pos-custom-aplica-diseno').checked);
+    return;
+  }
+
+  if (posMode === 'libre') {
+    // Venta libre: cualquier cosa fuera de catálogo, la talla es opcional (no siempre aplica).
+    tallaSel.innerHTML = '<option value="N/A">N/A (no aplica)</option>' + SIZES.map((s) => `<option value="${s}">${s}</option>`).join('');
     tallaSel.disabled = false;
     document.getElementById('pos-cantidad').disabled = false;
     document.getElementById('pos-cantidad').value = 1;
@@ -2491,6 +2514,36 @@ document.getElementById('btn-add-cart').addEventListener('click', () => {
     : Number(presentacionCargo) || 0;
   const precioFinal = precioUnitario + disenoPrecio + presentacionUnit;
 
+  // ---- Caso 0: venta libre (fuera del catálogo, se vende y cobra de una vez) ----
+  if (posMode === 'libre') {
+    const nombre = document.getElementById('pos-custom-nombre').value.trim();
+    const categoria = document.getElementById('pos-custom-categoria').value.trim() || 'Venta Libre';
+    const material = document.getElementById('pos-custom-material').value.trim() || '—';
+    const costoUnitario = parseMoneyInput(document.getElementById('pos-costo').value);
+    const tallaLibre = talla && talla !== 'N/A' ? talla : '—';
+    const precioFinalLibre = precioUnitario + disenoPrecio; // sin cargo de presentación: no siempre es una prenda
+
+    if (!nombre || cantidad < 1 || precioUnitario <= 0) {
+      showToast('Completa el nombre y el precio de la venta libre.', 'error');
+      return;
+    }
+
+    cart.push({
+      productId: null, nombre, categoria, material, talla: tallaLibre, cantidad, precioUnitario, costoUnitario,
+      disenoTamano, disenoPrecio, disenoCosto, presentacionUnit: 0, subtotal: cantidad * precioFinalLibre,
+      porPedido: false, ventaLibre: true,
+    });
+
+    renderCart();
+    showToast(`${nombre} agregado al carrito como venta libre.`);
+    document.getElementById('pos-custom-nombre').value = '';
+    document.getElementById('pos-custom-categoria').value = '';
+    document.getElementById('pos-custom-material').value = '';
+    document.getElementById('pos-custom-aplica-diseno').checked = false;
+    resetPOSSelectors();
+    return;
+  }
+
   // ---- Caso 1: producto personalizado por pedido (fuera del catálogo) ----
   if (posMode === 'pedido' && posCustomItem) {
     const nombre = document.getElementById('pos-custom-nombre').value.trim();
@@ -2577,6 +2630,7 @@ function renderCart() {
           <div class="flex items-center gap-1.5">
             <p class="text-sm font-medium truncate">${escapeHtml(it.nombre)}</p>
             ${it.porPedido ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+            ${it.ventaLibre ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-sky-950/40 text-sky-400 border border-sky-800">Venta Libre</span>' : ''}
           </div>
           <p class="text-[11px] text-silver">Talla ${it.talla} · x${it.cantidad} · ${fmtMoney(it.precioUnitario)} c/u${it.disenoTamano ? ` · Diseño ${it.disenoTamano} (+${fmtMoney(it.disenoPrecio)})` : ''}</p>
         </div>
@@ -2783,7 +2837,7 @@ function showReceipt(sale) {
   }
   document.getElementById('receipt-items').innerHTML = sale.items.map((it) => `
     <div class="flex justify-between text-xs">
-      <span class="text-silver">${escapeHtml(it.nombre)} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` · Diseño ${it.disenoTamano}` : ''}${it.porPedido ? ' <span class="text-amber-400">· Pedido</span>' : ''}</span>
+      <span class="text-silver">${escapeHtml(it.nombre)} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` · Diseño ${it.disenoTamano}` : ''}${it.porPedido ? ' <span class="text-amber-400">· Pedido</span>' : ''}${it.ventaLibre ? ' <span class="text-sky-400">· Venta Libre</span>' : ''}</span>
       <span>${fmtMoney(it.subtotal)}</span>
     </div>`).join('');
   const presentacionTotal = sale.presentacionTotal ?? sale.items.reduce((a, it) => a + (Number(it.presentacionUnit) || 0) * it.cantidad, 0);
@@ -2798,9 +2852,21 @@ function showReceipt(sale) {
   saldoWrap.hidden = estadoPago === 'completo';
   document.getElementById('receipt-saldo').textContent = fmtMoney(saldoPendiente);
   const tienePedido = sale.tienePedido ?? sale.items.some((it) => it.porPedido);
-  document.getElementById('receipt-stock-note').textContent = tienePedido
-    ? 'Incluye prendas por pedido: no se descontó stock de esas unidades.'
-    : 'El stock fue actualizado automáticamente.';
+  const tieneVentaLibre = sale.items.some((it) => it.ventaLibre);
+  const tieneInventario = sale.items.some((it) => !it.porPedido && !it.ventaLibre);
+  let stockNote;
+  if (tieneInventario && (tienePedido || tieneVentaLibre)) {
+    stockNote = 'El stock se actualizó solo para las prendas de inventario; las de pedido y/o venta libre no lo afectan.';
+  } else if (tienePedido && tieneVentaLibre) {
+    stockNote = 'Venta por pedido y venta libre: no aplica descuento de stock.';
+  } else if (tienePedido) {
+    stockNote = 'Incluye prendas por pedido: no se descontó stock de esas unidades.';
+  } else if (tieneVentaLibre) {
+    stockNote = 'Venta libre: no aplica descuento de stock.';
+  } else {
+    stockNote = 'El stock fue actualizado automáticamente.';
+  }
+  document.getElementById('receipt-stock-note').textContent = stockNote;
   document.getElementById('receipt-modal').hidden = false;
 }
 document.getElementById('btn-close-receipt').addEventListener('click', () => {
@@ -2899,7 +2965,7 @@ function renderEditSaleItems() {
         <div class="flex items-center justify-between gap-2">
           <div class="min-w-0">
             <p class="text-sm font-medium truncate">${escapeHtml(it.nombre)} <span class="text-silver text-xs">(${it.talla})</span></p>
-            <p class="text-[11px] text-silver">${it.disenoTamano ? `Diseño ${it.disenoTamano} (+${fmtMoney(it.disenoPrecio)}) · ` : ''}Presentación +${fmtMoney(it.presentacionUnit || 0)}${it.porPedido ? ' · Pedido' : ''}</p>
+            <p class="text-[11px] text-silver">${it.disenoTamano ? `Diseño ${it.disenoTamano} (+${fmtMoney(it.disenoPrecio)}) · ` : ''}Presentación +${fmtMoney(it.presentacionUnit || 0)}${it.porPedido ? ' · Pedido' : ''}${it.ventaLibre ? ' · Venta Libre' : ''}</p>
           </div>
           <button type="button" data-edit-remove="${i}" class="text-zinc-500 hover:text-red-400 transition-colors shrink-0">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
@@ -3245,8 +3311,9 @@ function renderDashboard() {
     tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-zinc-600 text-sm">No hay ventas en este periodo.</td></tr>';
   } else {
     tbody.innerHTML = filtered.map((s) => {
-      const detalle = (s.items || []).map((it) => `${it.nombre} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` +Diseño ${it.disenoTamano}` : ''}${it.porPedido ? ' [Pedido]' : ''}`).join(', ');
+      const detalle = (s.items || []).map((it) => `${it.nombre} (${it.talla}) x${it.cantidad}${it.disenoTamano ? ` +Diseño ${it.disenoTamano}` : ''}${it.porPedido ? ' [Pedido]' : ''}${it.ventaLibre ? ' [Venta Libre]' : ''}`).join(', ');
       const tienePedido = s.tienePedido ?? (s.items || []).some((it) => it.porPedido);
+      const tieneVentaLibre = (s.items || []).some((it) => it.ventaLibre);
       return `
         <tr class="border-b border-line/60">
           <td class="px-6 py-3 whitespace-nowrap">${fmtDate(s.fecha)}</td>
@@ -3255,6 +3322,7 @@ function renderDashboard() {
             <div class="flex items-center gap-1.5">
               <span class="truncate" title="${escapeHtml(detalle)}">${escapeHtml(detalle)}</span>
               ${tienePedido ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+              ${tieneVentaLibre ? '<span class="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-sky-950/40 text-sky-400 border border-sky-800">Venta Libre</span>' : ''}
               ${estadoPagoBadgeHtml(s)}
             </div>
           </td>
@@ -3316,6 +3384,7 @@ function renderHistorial2() {
   }
   tbody.innerHTML = filtered.map((s) => {
     const tienePedido = s.tienePedido ?? (s.items || []).some((it) => it.porPedido);
+    const tieneVentaLibre = (s.items || []).some((it) => it.ventaLibre);
     const cliente = s.cliente || {};
     return `
     <tr class="border-b border-line/60">
@@ -3323,6 +3392,7 @@ function renderHistorial2() {
         <div class="flex items-center gap-1.5 flex-wrap">
           <span>${s.id.slice(0, 8).toUpperCase()}</span>
           ${tienePedido ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-950/40 text-amber-400 border border-amber-800">Pedido</span>' : ''}
+          ${tieneVentaLibre ? '<span class="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-950/40 text-sky-400 border border-sky-800">Venta Libre</span>' : ''}
           ${estadoPagoBadgeHtml(s)}
         </div>
       </td>
@@ -3378,7 +3448,7 @@ document.getElementById('btn-export-csv').addEventListener('click', () => {
         presentacionUnit.toFixed(2), (presentacionUnit * it.cantidad).toFixed(2),
         it.subtotal.toFixed(2), s.metodoPago, s.total.toFixed(2),
         estadoPagoLbl, montoAbonado.toFixed(2), saldoPendiente.toFixed(2),
-        it.porPedido ? 'Por Pedido' : 'Inventario',
+        it.porPedido ? 'Por Pedido' : (it.ventaLibre ? 'Venta Libre' : 'Inventario'),
       ]);
     });
   });
