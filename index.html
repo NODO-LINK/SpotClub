@@ -175,8 +175,40 @@
   @media print {
     body * { visibility: hidden; }
     #receipt-print-area, #receipt-print-area * { visibility: visible; }
+
+    /* El modal y su contenedor envuelven el recibo con backdrop-filter + max-height + overflow
+       (para mostrarlo centrado y con scroll en pantalla). Al imprimir, backdrop-filter en un
+       ancestro hace que "position: fixed" del recibo se recorte a ESE contenedor en vez de a la
+       página completa, cortando el logo y los datos del cliente. Se neutralizan esas propiedades
+       aquí para que el recibo completo fluya normal en la hoja impresa. */
+    #receipt-modal {
+      position: static !important;
+      background: #fff !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      padding: 0 !important;
+      display: block !important;
+    }
+    #receipt-modal > div {
+      position: static !important;
+      background: #fff !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      max-height: none !important;
+      overflow: visible !important;
+      width: auto !important;
+      max-width: 480px !important;
+      margin: 0 auto !important;
+      box-shadow: none !important;
+      border: none !important;
+    }
+    /* El encabezado "VENTA COMPLETADA" y la barra de botones (Imprimir/Descargar/Cerrar) son hermanos
+       de #receipt-print-area dentro del modal; visibility:hidden no los saca del flujo, así que sin
+       esto dejaban un hueco en blanco arriba y abajo del recibo impreso. */
+    #receipt-modal > div > div:not(#receipt-print-area) { display: none !important; }
     #receipt-print-area {
-      position: fixed; inset: 0; background: #fff !important; color: #000 !important;
+      position: static !important;
+      background: #fff !important; color: #000 !important;
       padding: 24px;
     }
     #receipt-print-area * { color: #000 !important; border-color: #ccc !important; }
